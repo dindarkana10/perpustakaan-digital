@@ -10,10 +10,11 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\KategoriController;
 use App\Http\Controllers\Admin\AlatController;
 use App\Http\Controllers\Admin\PeminjamanController;
+use App\Http\Controllers\Petugas\PetugasPeminjamanController;
 
-// Route::get('/', function () {
-//     return view('welcome');
-// });
+Route::get('/defaultroute', function () {
+    return view('welcome');
+});
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -44,11 +45,26 @@ Route::get('/admin/dashboard', function () {
     Route::resource('/admin/peminjaman', PeminjamanController::class)->names('peminjaman');
 });
 
-Route::middleware(['auth', 'role:petugas'])->group(function () {
+Route::middleware(['auth', 'role:petugas'])->prefix('petugas')->name('petugas.')->group(function () {
+    Route::get('/dashboard', function () {
+        return view('petugas.dashboard', [
+        'totalPeminjaman' => Peminjaman::count(),
+        'menunggu' => Peminjaman::where('status', 'menunggu_persetujuan')->count(),
+        'dipinjam' => Peminjaman::where('status', 'dipinjam')->count(),
+        'terlambat' => Peminjaman::where('status', 'terlambat')->count(),
+        ]);
+    })->name('dashboard');
 
-    Route::get('/petugas/dashboard', function () {
-        return view('petugas.dashboard');
-    })->name('petugas.dashboard');
+    // Resource route untuk CRUD dasar
+    Route::resource('peminjaman', PetugasPeminjamanController::class);
+    
+    // Route khusus untuk approval
+    Route::post('peminjaman/{id}/approve', [PetugasPeminjamanController::class, 'approve'])
+        ->name('peminjaman.approve');
+    Route::post('peminjaman/{id}/reject', [PetugasPeminjamanController::class, 'reject'])
+        ->name('peminjaman.reject');
+    Route::post('peminjaman/{id}/pengembalian', [PetugasPeminjamanController::class, 'pengembalian'])
+        ->name('peminjaman.pengembalian');
 });
 
 Route::middleware(['auth', 'role:peminjam'])->group(function () {

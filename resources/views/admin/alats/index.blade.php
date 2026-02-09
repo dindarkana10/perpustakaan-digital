@@ -94,6 +94,12 @@
                 <div class="col-md-2">
                     <button class="btn btn-primary w-100">Filter</button>
                 </div>
+                <div class="col-md-2">
+                        <a href="{{ route('alats.index') }}" class="btn btn-danger w-100">
+                            <iconify-icon icon="solar:restart-outline" width="18" class="me-1"></iconify-icon>
+                            Reset
+                        </a>
+                    </div>
                 </form>
 
                 <table id="alatTable" class="table table-bordered table-striped">

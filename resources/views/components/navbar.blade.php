@@ -36,7 +36,7 @@
                             <i class="ti ti-logout me-2"></i> Logout
                         </button>
                     </form>
-                </li>
+                </li>  
             </ul>
         </div>
     </div>

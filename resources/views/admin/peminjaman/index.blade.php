@@ -102,6 +102,7 @@
 
                     <div class="col-md-2">
                         <a href="{{ route('peminjaman.index') }}" class="btn btn-danger w-100">
+                            <iconify-icon icon="solar:restart-outline" width="18" class="me-1"></iconify-icon>
                             Reset
                         </a>
                     </div>

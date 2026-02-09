@@ -89,22 +89,22 @@
           <span class="hide-menu">Transaksi</span>
         </li>
 
-        <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('peminjaman.approval') }}">
+        <li class="sidebar-item {{ request()->routeIs('peminjaman.*') ? 'active' : '' }}">
+          <a class="sidebar-link" href="{{ route( 'petugas.peminjaman.index' )}}">
             <i class="ti ti-checklist"></i>
             <span class="hide-menu">Persetujuan Peminjaman</span>
           </a>
         </li>
 
         <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('pengembalian.monitor') }}">
+          <a class="sidebar-link" href="">
             <i class="ti ti-eye"></i>
             <span class="hide-menu">Pantau Pengembalian</span>
           </a>
         </li>
 
         <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('laporan.index') }}">
+          <a class="sidebar-link" href="">
             <i class="ti ti-file-text"></i>
             <span class="hide-menu">Cetak Laporan</span>
           </a>
