@@ -45,6 +45,7 @@ Route::get('/admin/dashboard', function () {
     Route::resource('/admin/peminjaman', PeminjamanController::class)->names('peminjaman');
 });
 
+//ROLE PETUGAS
 Route::middleware(['auth', 'role:petugas'])->prefix('petugas')->name('petugas.')->group(function () {
     Route::get('/dashboard', function () {
         return view('petugas.dashboard', [
@@ -67,11 +68,18 @@ Route::middleware(['auth', 'role:petugas'])->prefix('petugas')->name('petugas.')
         ->name('peminjaman.pengembalian');
 });
 
+//ROLE PEMINJAM
 Route::middleware(['auth', 'role:peminjam'])->group(function () {
 
     Route::get('/peminjam/dashboard', function () {
         return view('peminjam.dashboard');
     })->name('peminjam.dashboard');
+
+    // Route untuk daftar alat
+    Route::get('/alat', [App\Http\Controllers\Peminjam\DaftarAlatController::class, 'index'])->name('alat.index');
+    // Route untuk peminjaman
+    Route::resource('peminjaman', App\Http\Controllers\Peminjam\PeminjamPeminjamanController::class);
+
 });
 
 Route::middleware('auth')->group(function () {

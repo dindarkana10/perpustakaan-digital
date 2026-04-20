@@ -120,26 +120,33 @@
           <span class="hide-menu">Peminjaman</span>
         </li>
 
-        <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('alat.list') }}">
+        <li class="sidebar-item {{ request()->routeIs('alat.*') ? 'active' : '' }}">
+          <a class="sidebar-link" href="{{ route( 'alat.index' )}}">
             <i class="ti ti-list"></i>
             <span class="hide-menu">Daftar Alat</span>
           </a>
         </li>
 
-        <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('peminjaman.create') }}">
+        <li class="sidebar-item {{ request()->is('peminjaman/create*') ? 'active' : '' }}">
+          <a class="sidebar-link" href="{{ route( 'peminjaman.create' )}}">
             <i class="ti ti-pencil-plus"></i>
             <span class="hide-menu">Ajukan Peminjaman</span>
           </a>
         </li>
 
-        <li class="sidebar-item">
-          <a class="sidebar-link" href="{{ route('pengembalian.create') }}">
+        <li class="sidebar-item {{ request()->routeIs('peminjaman.index') ? 'active' : '' }}">
+          <a class="sidebar-link" href="{{ route( 'peminjaman.index' )}}">
+            <i class="ti ti-history"></i>
+            <span class="hide-menu">Riwayat Peminjaman</span>
+          </a>
+        </li>
+
+        {{-- <li class="sidebar-item">
+          <a class="sidebar-link" href="">
             <i class="ti ti-rotate"></i>
             <span class="hide-menu">Pengembalian Alat</span>
           </a>
-        </li>
+        </li> --}}
         @endif
 
       </ul>
