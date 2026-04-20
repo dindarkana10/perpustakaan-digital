@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Peminjaman;
 use App\Models\User;
 use App\Models\Alat;
+use App\Models\LogAktivitas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -74,6 +75,14 @@ class PetugasPeminjamanController extends Controller
                 'petugas_id' => Auth::id()
             ]);
             
+            // ✅ CATAT LOG
+            LogAktivitas::record(
+                'Peminjaman Disetujui',
+                'Peminjaman',
+                $peminjaman->id,
+                'Menyetujui peminjaman oleh ' . $peminjaman->user->name
+            );
+
             DB::commit();
             
             return redirect()->route('petugas.peminjaman.index')
@@ -104,6 +113,14 @@ class PetugasPeminjamanController extends Controller
                 'petugas_id' => Auth::id()
             ]);
             
+            // ✅ CATAT LOG
+            LogAktivitas::record(
+                'Peminjaman Ditolak',
+                'Peminjaman',
+                $peminjaman->id,
+                'Menolak peminjaman oleh ' . $peminjaman->user->name
+            );
+
             DB::commit();
             
             return redirect()->route('petugas.peminjaman.index')

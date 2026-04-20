@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Alat;
 use App\Models\Kategori;
+use App\Models\LogAktivitas;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -18,11 +19,13 @@ class AlatController extends Controller
     {
         $query = Alat::with('kategori');
 
+        //filter
         if ($request->kategori_id) {
             $query->where('kategori_id', $request->kategori_id);
         }
 
-        $alats = Alat::with('kategori')->latest()->get();
+        $alats = $query->latest()->get();
+        
         $kategoris = Kategori::all();
         return view('admin.alats.index', compact('alats', 'kategoris'));
     }
@@ -76,8 +79,16 @@ class AlatController extends Controller
                 $validated['gambar'] = $imageName;
             }
 
-            Alat::create($validated);
+            $alat = Alat::create($validated);
             
+            // LOG AKTIVITAS - TAMBAH ALAT
+            LogAktivitas::record(
+                'Tambah Alat',
+                'Alat',
+                $alat->id,
+                "Menambahkan alat baru: {$alat->nama_alat} dengan stok {$alat->stok_total}"
+            );
+
             return redirect()->route('alats.index')
                 ->with('success', 'Alat berhasil ditambahkan!');
         } catch (\Exception $e) {
@@ -109,6 +120,13 @@ class AlatController extends Controller
     public function update(Request $request, string $id)
     {
         $alat = Alat::findOrFail($id);
+
+        // Simpan data lama untuk log
+        $oldData = [
+            'nama' => $alat->nama_alat,
+            'stok' => $alat->stok_tersedia,
+            'kondisi' => $alat->kondisi
+        ];
 
         $validated = $request->validate([
             'kategori_id' => 'required|exists:kategoris,id',
@@ -153,6 +171,14 @@ class AlatController extends Controller
 
             $alat->update($validated);
             
+            // LOG AKTIVITAS - EDIT ALAT
+            LogAktivitas::record(
+                'Edit Alat',
+                'Alat',
+                $alat->id,
+                "Mengubah data alat: {$oldData['nama']} → {$alat->nama_alat}"
+            );
+
             return redirect()->route('alats.index')
                 ->with('success', 'Alat berhasil diperbarui!');
         } catch (\Exception $e) {
@@ -170,6 +196,10 @@ class AlatController extends Controller
         try {
             $alat = Alat::findOrFail($id);
             
+            // Simpan nama untuk log
+            $namaAlat = $alat->nama_alat;
+            $alatId = $alat->id;
+
             // Delete image if exists
             if ($alat->gambar && Storage::exists('public/alats/' . $alat->gambar)) {
                 Storage::delete('public/alats/' . $alat->gambar);
@@ -177,6 +207,14 @@ class AlatController extends Controller
             
             $alat->delete();
             
+            // LOG AKTIVITAS - HAPUS ALAT
+            LogAktivitas::record(
+                'Hapus Alat',
+                'Alat',
+                $alatId,
+                "Menghapus alat: {$namaAlat}"
+            );
+
             return redirect()->route('alats.index')
                 ->with('success', 'Alat berhasil dihapus!');
         } catch (\Exception $e) {

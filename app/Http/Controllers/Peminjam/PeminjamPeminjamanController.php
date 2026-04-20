@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Peminjaman;
 use App\Models\DetailPeminjaman;
 use App\Models\Alat;
+use App\Models\LogAktivitas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,7 +18,7 @@ class PeminjamPeminjamanController extends Controller
         // Ambil peminjaman milik user yang login
         $peminjaman = Peminjaman::with(['petugas', 'details.alat.kategori'])
             ->where('user_id', Auth::id())
-            ->latest()
+            ->orderBy('created_at', 'asc')
             ->get();
             
         return view('peminjam.peminjaman.index', compact('peminjaman'));
@@ -80,6 +81,8 @@ class PeminjamPeminjamanController extends Controller
                 'status' => 'menunggu_persetujuan',
             ]);
 
+            $alatList = [];
+
             // Create detail peminjaman
             foreach ($request->alat_id as $index => $alat_id) {
                 $alat = Alat::findOrFail($alat_id);
@@ -91,7 +94,16 @@ class PeminjamPeminjamanController extends Controller
                     'jumlah' => $jumlah,
                     'kondisi_pinjam' => $alat->kondisi, // Otomatis ambil kondisi alat saat ini
                 ]);
+
+                $alatList[] = "{$alat->nama_alat} ({$jumlah})";
             }
+
+            LogAktivitas::record(
+                'Ajukan Peminjaman',
+                'Peminjaman',
+                $peminjaman->id,
+                'Peminjam mengajukan peminjaman | Alat: ' . implode(', ', $alatList)
+            );
 
             DB::commit();
             
@@ -128,6 +140,13 @@ class PeminjamPeminjamanController extends Controller
                 throw new \Exception('Hanya peminjaman yang menunggu persetujuan yang bisa dibatalkan.');
             }
             
+            LogAktivitas::record(
+                'Batalkan Peminjaman',
+                'Peminjaman',
+                $peminjaman->id,
+                'Peminjam membatalkan pengajuan peminjaman'
+            );
+
             $peminjaman->delete();
             
             DB::commit();

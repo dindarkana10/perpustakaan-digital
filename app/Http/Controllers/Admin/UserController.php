@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\LogAktivitas;
 
 class UserController extends Controller
 {
@@ -49,12 +50,20 @@ class UserController extends Controller
             'role.in' => 'Role tidak valid',
         ]);
 
-        User::create([
+        $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'role'     => $request->role,
         ]);
+
+        // LOG AKTIVITAS - TAMBAH USER
+        LogAktivitas::record(
+            'Tambah User',
+            'User',
+            $user->id,
+            "Menambahkan user baru: {$user->name} ({$user->email}) dengan role {$user->role}"
+        );
 
         return redirect()
             ->route('users.index')
@@ -82,6 +91,13 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        // Simpan data lama untuk log
+        $oldData = [
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role
+        ];
+
         $rules = [
             'name'  => 'required|string|min:3|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
@@ -119,6 +135,34 @@ class UserController extends Controller
 
         $user->update($data);
 
+        // 🔥 LOG AKTIVITAS - EDIT USER
+        // Buat keterangan detail perubahan
+        $changes = [];
+        if ($oldData['name'] !== $user->name) {
+            $changes[] = "Nama: {$oldData['name']} → {$user->name}";
+        }
+        if ($oldData['email'] !== $user->email) {
+            $changes[] = "Email: {$oldData['email']} → {$user->email}";
+        }
+        if ($oldData['role'] !== $user->role) {
+            $changes[] = "Role: {$oldData['role']} → {$user->role}";
+        }
+        if ($request->filled('password')) {
+            $changes[] = "Password diubah";
+        }
+
+        $keterangan = "Mengubah user: {$user->name}";
+        if (!empty($changes)) {
+            $keterangan .= " | Perubahan: " . implode(', ', $changes);
+        }
+
+        LogAktivitas::record(
+            'Edit User',
+            'User',
+            $user->id,
+            $keterangan
+        );
+
         return redirect()
             ->route('users.index')
             ->with('success', 'User berhasil diupdate');
@@ -130,8 +174,22 @@ class UserController extends Controller
     public function destroy(User $user)
     {
         try {
+            // Simpan data untuk log sebelum dihapus
+            $userName = $user->name;
+            $userEmail = $user->email;
+            $userRole = $user->role;
+            $userId = $user->id;
+
             $user->delete();
             
+            // LOG AKTIVITAS - HAPUS USER
+            LogAktivitas::record(
+                'Hapus User',
+                'User',
+                $userId,
+                "Menghapus user: {$userName} ({$userEmail}) dengan role {$userRole}"
+            );
+
             return redirect()
                 ->route('users.index')
                 ->with('success', 'User berhasil dihapus');

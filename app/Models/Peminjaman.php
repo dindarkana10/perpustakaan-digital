@@ -44,6 +44,12 @@ class Peminjaman extends Model
         return $this->hasMany(DetailPeminjaman::class, 'peminjaman_id');
     }
 
+    //Relasi ke Pengembalian
+    public function pengembalian()
+    {
+        return $this->hasOne(Pengembalian::class);
+    }
+
     // Accessor untuk badge status
     public function getStatusBadgeAttribute()
     {

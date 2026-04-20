@@ -160,7 +160,7 @@
                                 </form>
                             @endif
 
-                            <!-- JIKA STATUS DIPINJAM ATAU TERLAMBAT -->
+                            {{-- <!-- JIKA STATUS DIPINJAM ATAU TERLAMBAT -->
                             @if(in_array($peminjaman->status, ['dipinjam', 'terlambat']))
                                 <!-- Tombol Kembalikan -->
                                 <form action="{{ route('petugas.peminjaman.pengembalian', $peminjaman->id) }}" 
@@ -170,7 +170,7 @@
                                         <iconify-icon icon="solar:box-minimalistic-bold" width="18"></iconify-icon>
                                     </button>
                                 </form>
-                            @endif
+                            @endif --}}
 
                             <!-- STATUS LAIN: HANYA DETAIL -->
                         </td>

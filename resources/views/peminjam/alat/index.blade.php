@@ -206,9 +206,9 @@
               </div>
             </div>
 
-            <!-- KETERANGAN / KEPERLUAN -->
+            <!-- KETERANGAN -->
             <div class="col-md-7">
-              <label class="form-label">Keperluan / Keterangan</label>
+              <label class="form-label">Keterangan</label>
               <textarea id="show_keterangan"
                 class="form-control"
                 rows="8"
@@ -248,7 +248,7 @@
         zeroRecords: 'Tidak ada data yang cocok'
       },
       pageLength: 10,
-      order: [[2, 'asc']], // Sort by nama alat
+      order: [], // Sort by nama alat
       columnDefs: [
         { orderable: false, targets: [1, 6] }, // Gambar & Aksi tidak bisa di-sort
         { className: 'text-center', targets: [0, 1, 5, 6] } // Center align

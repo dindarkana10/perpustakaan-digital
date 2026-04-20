@@ -211,7 +211,7 @@
         zeroRecords: 'Tidak ada data yang cocok'
       },
       pageLength: 10,
-      order: [[0, 'desc']],
+      order: [],
       columnDefs: [
         { orderable: false, targets: [5] }
       ]

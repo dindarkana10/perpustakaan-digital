@@ -11,7 +11,7 @@ class DaftarAlatController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Alat::with('kategori')->where('stok_tersedia', '>', 0);
+        $query = Alat::with('kategori')->where('stok_tersedia', '>', 0)->orderBy('created_at', 'asc');
 
         // Filter by kategori
         if ($request->kategori_id) {

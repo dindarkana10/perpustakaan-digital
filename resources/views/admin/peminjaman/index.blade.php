@@ -101,7 +101,7 @@
                     </div>
 
                     <div class="col-md-2">
-                        <a href="{{ route('peminjaman.index') }}" class="btn btn-danger w-100">
+                        <a href="{{ route('admin.peminjaman.index') }}" class="btn btn-danger w-100">
                             <iconify-icon icon="solar:restart-outline" width="18" class="me-1"></iconify-icon>
                             Reset
                         </a>
@@ -172,7 +172,7 @@
                                 </button>
 
                                 <!-- Tombol Hapus -->
-                                <form action="{{ route('peminjaman.destroy', $peminjaman->id) }}" method="POST" class="d-inline deleteForm">
+                                <form action="{{ route('admin.peminjaman.destroy', $peminjaman->id) }}" method="POST" class="d-inline deleteForm">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus">
@@ -215,7 +215,7 @@
           <h5 class="modal-title" id="createPeminjamanModalLabel">Tambah Peminjaman Baru</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <form action="{{ route('peminjaman.store') }}" method="POST" id="createPeminjamanForm">
+        <form action="{{ route('admin.peminjaman.store') }}" method="POST" id="createPeminjamanForm">
           @csrf
           <div class="modal-body">
             <div class="row">
@@ -300,7 +300,6 @@
                             <option value="">Pilih</option>
                             <option value="baik">Baik</option>
                             <option value="rusak_ringan">Rusak Ringan</option>
-                            <option value="rusak_berat">Rusak Berat</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -312,10 +311,10 @@
                 </div>
             </div>
 
-            <button type="button" class="btn btn-sm btn-outline-primary" id="addAlat">
+            {{-- <button type="button" class="btn btn-sm btn-outline-primary" id="addAlat">
                 <iconify-icon icon="solar:add-circle-outline" width="18"></iconify-icon>
                 Tambah Alat
-            </button>
+            </button> --}}
 
           </div>
           <div class="modal-footer">

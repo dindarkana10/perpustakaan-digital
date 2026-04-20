@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Kategori;
+use App\Models\LogAktivitas;
 
 class KategoriController extends Controller
 {
@@ -42,7 +43,16 @@ class KategoriController extends Controller
         ]);
 
         try {
-            Kategori::create($validated);
+            $kategori = Kategori::create($validated);
+
+            // LOG AKTIVITAS
+            LogAktivitas::record(
+                'Tambah Kategori',
+                'Kategori',
+                $kategori->id,
+                "Menambahkan kategori: {$kategori->nama_kategori}"
+            );
+
             return redirect()->route('kategoris.index')
                 ->with('success', 'Kategori berhasil ditambahkan!');
         } catch (\Exception $e) {
@@ -75,6 +85,10 @@ class KategoriController extends Controller
     {
         $kategori = Kategori::findOrFail($id);
 
+        // Simpan data lama untuk log
+        $oldNama = $kategori->nama_kategori;
+        $oldDeskripsi = $kategori->deskripsi;
+
         $validated = $request->validate([
             'nama_kategori' => 'required|string|min:3|max:255|unique:kategoris,nama_kategori,' . $id,
             'deskripsi' => 'nullable|string|max:1000'
@@ -88,6 +102,28 @@ class KategoriController extends Controller
 
         try {
             $kategori->update($validated);
+
+            // LOG AKTIVITAS dengan detail perubahan
+            $changes = [];
+            if ($oldNama !== $kategori->nama_kategori) {
+                $changes[] = "Nama: {$oldNama} → {$kategori->nama_kategori}";
+            }
+            if ($oldDeskripsi !== $kategori->deskripsi) {
+                $changes[] = "Deskripsi diubah";
+            }
+
+            $keterangan = "Mengubah kategori: {$kategori->nama_kategori}";
+            if (!empty($changes)) {
+                $keterangan .= " | Perubahan: " . implode(', ', $changes);
+            }
+
+            LogAktivitas::record(
+                'Edit Kategori',
+                'Kategori',
+                $kategori->id,
+                $keterangan
+            );
+
             return redirect()->route('kategoris.index')
                 ->with('success', 'Kategori berhasil diperbarui!');
         } catch (\Exception $e) {
@@ -104,8 +140,19 @@ class KategoriController extends Controller
     {
         try {
             $kategori = Kategori::findOrFail($id);
+            $namaKategori = $kategori->nama_kategori;
+            $kategoriId = $kategori->id;
+
             $kategori->delete();
             
+            // LOG AKTIVITAS
+            LogAktivitas::record(
+                'Hapus Kategori',
+                'Kategori',
+                $kategoriId,
+                "Menghapus kategori: {$namaKategori}"
+            );
+
             return redirect()->route('kategoris.index')
                 ->with('success', 'Kategori berhasil dihapus!');
         } catch (\Exception $e) {

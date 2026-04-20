@@ -289,7 +289,7 @@
                       <div class="invalid-feedback">
                         @error('harga_beli') {{ $message }} @else Harga beli minimal 0. @enderror
                       </div>
-                      <small class="text-muted">Opsional - untuk perhitungan ganti rugi</small>
+                      {{-- <small class="text-muted">Opsional - untuk perhitungan ganti rugi</small> --}}
                     </div>
                 </div>
                 <div class="col-md-6">
