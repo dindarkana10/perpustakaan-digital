@@ -96,6 +96,18 @@ Route::middleware(['auth', 'role:petugas'])->prefix('petugas')->name('petugas.')
     Route::get('pengembalian-riwayat', [App\Http\Controllers\Petugas\PetugasPengembalianController::class, 'riwayat'])
         ->name('pengembalian.riwayat');
 
+    // Show detail (JSON untuk modal)
+    Route::get('pengembalian/{id}/show', [PetugasPengembalianController::class, 'show'])
+        ->name('pengembalian.show');
+
+    // Download PDF struk
+    Route::get('pengembalian/{id}/download-struk', [PetugasPengembalianController::class, 'downloadStruk'])
+        ->name('pengembalian.download-struk');
+
+    // Kirim struk via email
+    Route::post('pengembalian/{id}/kirim-struk', [PetugasPengembalianController::class, 'kirimStruk'])
+        ->name('pengembalian.kirim-struk');
+
     // Route laporan
     Route::get('laporan', [PetugasLaporanController::class, 'index'])
     ->name('laporan.index');

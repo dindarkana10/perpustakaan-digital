@@ -138,10 +138,18 @@
                         </td>
                         <td class="text-center">{{ $alat->stok_total }}</td>
                         <td class="text-center">
-                            <span class="badge {{ $alat->stok_tersedia > 0 ? 'bg-success' : 'bg-danger' }}">
+                            <span class="badge 
+                                @if($alat->stok_tersedia <= 5)
+                                bg-danger
+                                @elseif($alat->stok_tersedia <= 10)
+                                bg-warning
+                                @else
+                                bg-success
+                                @endif
+                            ">
                                 {{ $alat->stok_tersedia }}
                             </span>
-                        </td>
+                            </td>
                         <td>{{ $alat->formatted_harga_beli }}</td>
                         <td class="text-center">
                         <button type="button"
