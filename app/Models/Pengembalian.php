@@ -13,6 +13,7 @@ class Pengembalian extends Model
 
     protected $fillable = [
         'peminjaman_id',
+        'user_id',
         'tanggal_kembali_aktual',
         'petugas_id',
         'keterlambatan_hari',
@@ -30,6 +31,11 @@ class Pengembalian extends Model
     public function peminjaman()
     {
         return $this->belongsTo(Peminjaman::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function petugas()

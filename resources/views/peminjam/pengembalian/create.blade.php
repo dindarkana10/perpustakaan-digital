@@ -1,262 +1,131 @@
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ajukan Pengembalian</title>
-  <link rel="stylesheet" href="{{ asset ('template/css/styles.min.css') }}" />
+  <title>Ajukan Pengembalian - Peminjam</title>
+  <link rel="stylesheet" href="{{ asset('template/css/styles.min.css') }}" />
 </head>
-
 <body>
   <div class="page-wrapper" id="main-wrapper" data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
     data-sidebar-position="fixed" data-header-position="fixed">
-
     <x-navbar></x-navbar>
     <x-sidebar></x-sidebar>
-
     <div class="body-wrapper">
       <div class="container-fluid">
-
         <div class="card">
           <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-              <h5 class="card-title fw-semibold mb-0">Ajukan Pengembalian Alat</h5>
-              <a href="{{ route('pengembalian.index') }}" class="btn btn-outline-secondary">
-                <iconify-icon icon="solar:arrow-left-outline" width="18" class="me-1"></iconify-icon>
-                Kembali
-              </a>
-            </div>
+            <h5 class="card-title fw-semibold mb-4">Ajukan Pengembalian Buku</h5>
+
+            @if(session('error'))
+              <div class="alert alert-danger">{{ session('error') }}</div>
+            @endif
 
             @if($peminjamans->isEmpty())
-              <div class="alert alert-info">
-                <iconify-icon icon="solar:info-circle-outline" width="20"></iconify-icon>
-                Tidak ada peminjaman yang perlu dikembalikan.
+              <div class="text-center py-5">
+                <div class="mb-3">
+                  <iconify-icon icon="solar: Smartphone-brk-outline" width="64" class="text-muted"></iconify-icon>
+                </div>
+                <h4 class="fw-bold">Tidak Ada Peminjaman Aktif</h4>
+                <p class="text-muted">Semua buku telah dikembalikan atau Anda belum melakukan peminjaman.</p>
+                <a href="{{ route('pengembalian.index') }}" class="btn btn-primary mt-3">
+                  <iconify-icon icon="solar:arrow-left-outline" class="me-1"></iconify-icon> Kembali ke Daftar
+                </a>
               </div>
-              <a href="{{ route('peminjam.dashboard') }}" class="btn btn-primary">
-                Kembali ke Dashboard
-              </a>
             @else
               <form action="{{ route('pengembalian.store') }}" method="POST">
                 @csrf
-
-                {{-- ── Pilih Peminjaman ────────────────────────────────────────────── --}}
+                
                 <div class="mb-4">
-                  <label class="form-label fw-bold">Pilih Peminjaman <span class="text-danger">*</span></label>
-                  <select name="peminjaman_id" id="peminjaman_id"
-                          class="form-select @error('peminjaman_id') is-invalid @enderror" required>
+                  <label class="form-label fw-bold">Pilih Peminjaman yang Ingin Dikembalikan</label>
+                  <select name="peminjaman_id" class="form-select" required id="peminjaman_select">
                     <option value="">-- Pilih Peminjaman --</option>
-                    @foreach($peminjamans as $peminjaman)
-                      <option value="{{ $peminjaman->id }}"
-                              data-tanggal-pinjam="{{ \Carbon\Carbon::parse($peminjaman->tanggal_pinjam)->format('d/m/Y') }}"
-                              data-tanggal-kembali="{{ \Carbon\Carbon::parse($peminjaman->tanggal_kembali_rencana)->format('d/m/Y') }}"
-                              data-keperluan="{{ $peminjaman->keperluan }}"
-                              data-details="{{ json_encode($peminjaman->details->map(function($d) {
-                                return [
-                                  'detail_id'     => $d->id,
-                                  'alat_id'       => $d->alat_id,
-                                  'nama_alat'     => $d->alat->nama_alat,
-                                  'jumlah'        => $d->jumlah,
-                                  'kondisi_pinjam'=> $d->kondisi_pinjam
-                                ];
-                              })) }}">
-                        Peminjaman {{ \Carbon\Carbon::parse($peminjaman->tanggal_pinjam)->format('d/m/Y') }}
-                        — {{ $peminjaman->details->count() }} Alat
+                    @foreach($peminjamans as $pj)
+                      <option value="{{ $pj->id }}" data-details='@json($pj->details)'>
+                        ID #{{ $pj->id }} - {{ \Carbon\Carbon::parse($pj->tanggal_pinjam)->format('d/m/Y') }} ({{ count($pj->details) }} Buku)
                       </option>
                     @endforeach
                   </select>
-                  @error('peminjaman_id')
-                    <div class="invalid-feedback">{{ $message }}</div>
-                  @enderror
                 </div>
 
-                {{-- ── Detail Peminjaman + Form Kondisi Kembali ───────────────────── --}}
-                <div id="detailPeminjaman" style="display:none;">
-                  <div class="card bg-light mb-4">
-                    <div class="card-body">
-                      <h6 class="fw-semibold mb-3">Detail Peminjaman</h6>
-                      <div class="row">
-                        <div class="col-md-4 mb-2">
-                          <label class="form-label">Tanggal Pinjam</label>
-                          <input type="text" class="form-control" id="display_tanggal_pinjam" readonly>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                          <label class="form-label">Tanggal Kembali Rencana</label>
-                          <input type="text" class="form-control" id="display_tanggal_kembali" readonly>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                          <label class="form-label">Keperluan</label>
-                          <input type="text" class="form-control" id="display_keperluan" readonly>
-                        </div>
-                      </div>
+                <div class="mb-4">
+                  <label class="form-label fw-bold">Tanggal Kembali Hari Ini</label>
+                  <input type="date" name="tanggal_kembali_aktual" class="form-control" value="{{ date('Y-m-d') }}" readonly>
+                  <small class="text-muted">Tanggal pengajuan pengembalian diset otomatis hari ini.</small>
+                </div>
 
-                      <h6 class="fw-semibold mt-4 mb-2">Kondisi Pengembalian Alat</h6>
-                      <p class="text-muted small mb-3">
-                        <iconify-icon icon="solar:info-circle-outline" width="16"></iconify-icon>
-                        Isi kondisi setiap alat saat dikembalikan. Alat dengan kondisi
-                        <strong>Rusak Berat</strong> atau <strong>Hilang</strong> akan dicatat dan
-                        tidak akan menambah stok tersedia.
-                      </p>
+                <div id="buku_list_container" style="display:none;">
+                  <h6 class="fw-bold text-primary mb-3">Daftar Buku yang Akan Dikembalikan</h6>
+                  <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                      <thead class="table-light">
+                        <tr>
+                          <th>Judul Buku</th>
+                          <th class="text-center">Jumlah</th>
+                          <th>Kondisi Saat Ini</th>
+                        </tr>
+                      </thead>
+                      <tbody id="buku_list_body">
+                        </tbody>
+                    </table>
+                  </div>
 
-                      <div class="table-responsive">
-                        <table class="table table-bordered align-middle">
-                          <thead class="table-light">
-                            <tr>
-                              <th style="width:40px">No</th>
-                              <th>Nama Alat</th>
-                              <th style="width:80px" class="text-center">Jumlah</th>
-                              <th style="width:130px" class="text-center">Kondisi Pinjam</th>
-                              <th style="width:170px">Kondisi Kembali <span class="text-danger">*</span></th>
-                              <th>Keterangan Kondisi</th>
-                            </tr>
-                          </thead>
-                          <tbody id="display_details">
-                            {{-- diisi oleh JavaScript --}}
-                          </tbody>
-                        </table>
-                      </div>
+                  <div class="alert alert-warning mt-3">
+                    <iconify-icon icon="solar:warning-outline" class="me-1"></iconify-icon>
+                    <strong>Perhatian:</strong> Admin akan memvalidasi kondisi buku saat Anda mengembalikan buku secara fisik ke perpustakaan.
+                  </div>
 
-                    </div>
+                  <div class="d-flex justify-content-end gap-2 mt-4">
+                    <a href="{{ route('pengembalian.index') }}" class="btn btn-secondary">Batal</a>
+                    <button type="submit" class="btn btn-primary px-4">Kirim Pengajuan</button>
                   </div>
                 </div>
-
-                {{-- ── Tanggal Pengembalian Aktual ─────────────────────────────────── --}}
-                <div class="mb-4">
-                  <label class="form-label fw-bold">
-                    Tanggal Pengembalian Aktual <span class="text-danger">*</span>
-                  </label>
-                  <input type="date" name="tanggal_kembali_aktual"
-                         class="form-control @error('tanggal_kembali_aktual') is-invalid @enderror"
-                         value="{{ old('tanggal_kembali_aktual', date('Y-m-d')) }}" required>
-                  @error('tanggal_kembali_aktual')
-                    <div class="invalid-feedback">{{ $message }}</div>
-                  @enderror
-                  <small class="text-muted">Tanggal hari ini: {{ date('d/m/Y') }}</small>
-                </div>
-
-                <div class="alert alert-warning">
-                  <iconify-icon icon="solar:danger-triangle-outline" width="20"></iconify-icon>
-                  <strong>Perhatian:</strong> Setelah mengajukan pengembalian, petugas akan memvalidasi
-                  kondisi alat dan menghitung denda (jika ada keterlambatan atau kerusakan).
-                </div>
-
-                <button type="submit" class="btn btn-primary" id="btnSubmit" disabled>
-                  <iconify-icon icon="solar:check-circle-bold" width="18" class="me-1"></iconify-icon>
-                  Ajukan Pengembalian
-                </button>
               </form>
             @endif
-
           </div>
         </div>
-
       </div>
     </div>
   </div>
 
-  <script src="{{ asset ('template/libs/jquery/dist/jquery.min.js') }}"></script>
-  <script src="{{ asset ('template/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
-  <script src="{{ asset ('template/js/sidebarmenu.js') }}"></script>
-  <script src="{{ asset ('template/js/app.min.js') }}"></script>
-  <script src="{{ asset ('template/libs/simplebar/dist/simplebar.js') }}"></script>
+  <script src="{{ asset('template/libs/jquery/dist/jquery.min.js') }}"></script>
+  <script src="{{ asset('template/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
   <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
-
   <script>
-    $(document).ready(function () {
-
-      /**
-       * Mapping label & badge warna untuk kondisi
-       */
-      const kondisiLabel = {
-        baik:         { text: 'Baik',         badge: 'bg-success' },
-        rusak_ringan: { text: 'Rusak Ringan',  badge: 'bg-warning text-dark' },
-        rusak_berat:  { text: 'Rusak Berat',   badge: 'bg-danger' },
-        hilang:       { text: 'Hilang',         badge: 'bg-secondary' },
-      };
-
-      function buildKondisiBadge(kondisi) {
-        const k = kondisiLabel[kondisi] || { text: kondisi, badge: 'bg-light text-dark' };
-        return `<span class="badge ${k.badge}">${k.text}</span>`;
-      }
-
-      function buildKondisiSelect(detailId) {
-        const oldVal = '{{ old("kondisi_kembali") }}' || '{}';
-        // Karena old() di JS blade sulit, kita tidak pre-fill; cukup default kosong
-        return `
-          <select name="kondisi_kembali[${detailId}]"
-                  class="form-select form-select-sm kondisi-select" required>
-            <option value="">-- Pilih --</option>
-            <option value="baik">Baik</option>
-            <option value="rusak_ringan">Rusak Ringan</option>
-            <option value="rusak_berat">Rusak Berat</option>
-            <option value="hilang">Hilang</option>
-          </select>
-        `;
-      }
-
-      function buildKeteranganInput(detailId) {
-        return `
-          <input type="text"
-                 name="keterangan_kondisi[${detailId}]"
-                 class="form-control form-control-sm"
-                 placeholder="Opsional...">
-        `;
-      }
-
-      $('#peminjaman_id').on('change', function () {
+    $(document).ready(function() {
+      $('#peminjaman_select').change(function() {
         const selected = $(this).find(':selected');
-
-        if (!selected.val()) {
-          $('#detailPeminjaman').hide();
-          $('#btnSubmit').prop('disabled', true);
-          return;
-        }
-
-        // Isi info ringkas
-        $('#display_tanggal_pinjam').val(selected.data('tanggal-pinjam'));
-        $('#display_tanggal_kembali').val(selected.data('tanggal-kembali'));
-        $('#display_keperluan').val(selected.data('keperluan'));
-
-        // Render baris tabel dengan form kondisi kembali
         const details = selected.data('details');
-        let html = '';
-        details.forEach((detail, index) => {
-          html += `
-            <tr>
-              <td class="text-center">${index + 1}</td>
-              <td>${detail.nama_alat}</td>
-              <td class="text-center">${detail.jumlah}</td>
-              <td class="text-center">${buildKondisiBadge(detail.kondisi_pinjam)}</td>
-              <td>${buildKondisiSelect(detail.detail_id)}</td>
-              <td>${buildKeteranganInput(detail.detail_id)}</td>
-            </tr>
-          `;
-        });
 
-        $('#display_details').html(html);
-        $('#detailPeminjaman').show();
-
-        // Aktifkan tombol submit hanya kalau semua kondisi sudah dipilih
-        checkAllKondisi();
-      });
-
-      // Pantau perubahan pada setiap select kondisi (delegasi karena elemen dinamis)
-      $(document).on('change', '.kondisi-select', function () {
-        checkAllKondisi();
-      });
-
-      function checkAllKondisi() {
-        const selects = $('.kondisi-select');
-        if (selects.length === 0) {
-          $('#btnSubmit').prop('disabled', true);
-          return;
+        if (details && details.length > 0) {
+          let html = '';
+          details.forEach(d => {
+            html += `
+              <tr>
+                <td>
+                  <input type="hidden" name="buku_id[]" value="${d.buku_id}">
+                  <input type="hidden" name="jumlah_kembali[]" value="${d.jumlah}">
+                  ${d.buku.judul_buku}
+                </td>
+                <td class="text-center">${d.jumlah}</td>
+                <td>
+                  <select name="kondisi_kembali[]" class="form-select" required>
+                    <option value="baik">Baik</option>
+                    <option value="rusak_ringan">Rusak Ringan</option>
+                    <option value="rusak_berat">Rusak Berat</option>
+                    <option value="hilang">Hilang</option>
+                  </select>
+                </td>
+              </tr>
+            `;
+          });
+          $('#buku_list_body').html(html);
+          $('#buku_list_container').show();
+        } else {
+          $('#buku_list_container').hide();
         }
-        const allFilled = selects.toArray().every(el => el.value !== '');
-        $('#btnSubmit').prop('disabled', !allFilled);
-      }
-
+      });
     });
   </script>
-
 </body>
 </html>

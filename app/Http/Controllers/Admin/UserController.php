@@ -10,54 +10,64 @@ use App\Models\LogAktivitas;
 
 class UserController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         $users = User::orderBy('created_at', 'desc')->get();
         return view('admin.users.index', compact('users'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        $request->validate([
+        $rules = [
             'name'     => 'required|string|min:3|max:255',
             'email'    => 'required|email|unique:users,email',
             'password' => 'required|min:8|confirmed',
-            'role'     => 'required|in:admin,petugas,peminjam',
-        ], [
-            'name.required' => 'Nama wajib diisi',
-            'name.min' => 'Nama minimal 3 karakter',
-            'email.required' => 'Email wajib diisi',
-            'email.email' => 'Format email tidak valid',
-            'email.unique' => 'Email sudah terdaftar',
-            'password.required' => 'Password wajib diisi',
-            'password.min' => 'Password minimal 8 karakter',
-            'password.confirmed' => 'Konfirmasi password tidak cocok',
-            'role.required' => 'Role wajib dipilih',
-            'role.in' => 'Role tidak valid',
-        ]);
+            'role'     => 'required|in:admin,peminjam',
+        ];
 
-        $user = User::create([
+        // Tambah validasi NISN & kelas_jurusan hanya jika role = peminjam
+        if ($request->role === 'peminjam') {
+            $rules['NISN']          = 'required|string|max:20|unique:users,NISN';
+            $rules['kelas_jurusan'] = 'required|string|max:100';
+        }
+
+        $messages = [
+            'name.required'          => 'Nama wajib diisi',
+            'name.min'               => 'Nama minimal 3 karakter',
+            'email.required'         => 'Email wajib diisi',
+            'email.email'            => 'Format email tidak valid',
+            'email.unique'           => 'Email sudah terdaftar',
+            'password.required'      => 'Password wajib diisi',
+            'password.min'           => 'Password minimal 8 karakter',
+            'password.confirmed'     => 'Konfirmasi password tidak cocok',
+            'role.required'          => 'Role wajib dipilih',
+            'role.in'                => 'Role tidak valid',
+            'NISN.required'          => 'NISN wajib diisi',
+            'NISN.unique'            => 'NISN sudah terdaftar',
+            'kelas_jurusan.required' => 'Kelas & Jurusan wajib diisi',
+        ];
+
+        $request->validate($rules, $messages);
+
+        $data = [
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'role'     => $request->role,
-        ]);
+        ];
 
-        // LOG AKTIVITAS - TAMBAH USER
+        if ($request->role === 'peminjam') {
+            $data['NISN']          = $request->NISN;
+            $data['kelas_jurusan'] = $request->kelas_jurusan;
+        }
+
+        $user = User::create($data);
+
         LogAktivitas::record(
             'Tambah User',
             'User',
@@ -65,61 +75,58 @@ class UserController extends Controller
             "Menambahkan user baru: {$user->name} ({$user->email}) dengan role {$user->role}"
         );
 
-        return redirect()
-            ->route('users.index')
-            ->with('success', 'User berhasil ditambahkan');
+        return redirect()->route('users.index')->with('success', 'User berhasil ditambahkan');
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
         //
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, User $user)
     {
-        // Simpan data lama untuk log
         $oldData = [
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role
+            'name'          => $user->name,
+            'email'         => $user->email,
+            'role'          => $user->role,
+            'NISN'          => $user->NISN,
+            'kelas_jurusan' => $user->kelas_jurusan,
         ];
 
         $rules = [
             'name'  => 'required|string|min:3|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
-            'role'  => 'required|in:admin,petugas,peminjam',
+            'role'  => 'required|in:admin,peminjam',
         ];
 
-        // Validasi password hanya jika diisi
+        if ($request->role === 'peminjam') {
+            $rules['NISN']          = 'required|string|max:20|unique:users,NISN,' . $user->id;
+            $rules['kelas_jurusan'] = 'required|string|max:100';
+        }
+
         if ($request->filled('password')) {
             $rules['password'] = 'required|min:8|confirmed';
         }
 
-        $validated = $request->validate($rules, [
-            'name.required' => 'Nama wajib diisi',
-            'name.min' => 'Nama minimal 3 karakter',
-            'email.required' => 'Email wajib diisi',
-            'email.email' => 'Format email tidak valid',
-            'email.unique' => 'Email sudah terdaftar',
-            'password.required' => 'Password wajib diisi',
-            'password.min' => 'Password minimal 8 karakter',
-            'password.confirmed' => 'Konfirmasi password tidak cocok',
-            'role.required' => 'Role wajib dipilih',
-            'role.in' => 'Role tidak valid',
+        $request->validate($rules, [
+            'name.required'          => 'Nama wajib diisi',
+            'name.min'               => 'Nama minimal 3 karakter',
+            'email.required'         => 'Email wajib diisi',
+            'email.email'            => 'Format email tidak valid',
+            'email.unique'           => 'Email sudah terdaftar',
+            'password.required'      => 'Password wajib diisi',
+            'password.min'           => 'Password minimal 8 karakter',
+            'password.confirmed'     => 'Konfirmasi password tidak cocok',
+            'role.required'          => 'Role wajib dipilih',
+            'role.in'                => 'Role tidak valid',
+            'NISN.required'          => 'NISN wajib diisi',
+            'NISN.unique'            => 'NISN sudah terdaftar',
+            'kelas_jurusan.required' => 'Kelas & Jurusan wajib diisi',
         ]);
 
         $data = [
@@ -128,61 +135,55 @@ class UserController extends Controller
             'role'  => $request->role,
         ];
 
-        // Update password hanya jika diisi
+        if ($request->role === 'peminjam') {
+            $data['NISN']          = $request->NISN;
+            $data['kelas_jurusan'] = $request->kelas_jurusan;
+        } else {
+            // Kosongkan field peminjam jika role bukan peminjam
+            $data['NISN']          = null;
+            $data['kelas_jurusan'] = null;
+        }
+
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);
         }
 
         $user->update($data);
 
-        // 🔥 LOG AKTIVITAS - EDIT USER
-        // Buat keterangan detail perubahan
+        // Buat log perubahan
         $changes = [];
-        if ($oldData['name'] !== $user->name) {
+        if ($oldData['name'] !== $user->name)
             $changes[] = "Nama: {$oldData['name']} → {$user->name}";
-        }
-        if ($oldData['email'] !== $user->email) {
+        if ($oldData['email'] !== $user->email)
             $changes[] = "Email: {$oldData['email']} → {$user->email}";
-        }
-        if ($oldData['role'] !== $user->role) {
+        if ($oldData['role'] !== $user->role)
             $changes[] = "Role: {$oldData['role']} → {$user->role}";
-        }
-        if ($request->filled('password')) {
+        if ($oldData['NISN'] !== $user->NISN)
+            $changes[] = "NISN: {$oldData['NISN']} → {$user->NISN}";
+        if ($oldData['kelas_jurusan'] !== $user->kelas_jurusan)
+            $changes[] = "Kelas/Jurusan: {$oldData['kelas_jurusan']} → {$user->kelas_jurusan}";
+        if ($request->filled('password'))
             $changes[] = "Password diubah";
-        }
 
         $keterangan = "Mengubah user: {$user->name}";
-        if (!empty($changes)) {
+        if (!empty($changes))
             $keterangan .= " | Perubahan: " . implode(', ', $changes);
-        }
 
-        LogAktivitas::record(
-            'Edit User',
-            'User',
-            $user->id,
-            $keterangan
-        );
+        LogAktivitas::record('Edit User', 'User', $user->id, $keterangan);
 
-        return redirect()
-            ->route('users.index')
-            ->with('success', 'User berhasil diupdate');
+        return redirect()->route('users.index')->with('success', 'User berhasil diupdate');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(User $user)
     {
         try {
-            // Simpan data untuk log sebelum dihapus
-            $userName = $user->name;
+            $userName  = $user->name;
             $userEmail = $user->email;
-            $userRole = $user->role;
-            $userId = $user->id;
+            $userRole  = $user->role;
+            $userId    = $user->id;
 
             $user->delete();
-            
-            // LOG AKTIVITAS - HAPUS USER
+
             LogAktivitas::record(
                 'Hapus User',
                 'User',
@@ -190,13 +191,9 @@ class UserController extends Controller
                 "Menghapus user: {$userName} ({$userEmail}) dengan role {$userRole}"
             );
 
-            return redirect()
-                ->route('users.index')
-                ->with('success', 'User berhasil dihapus');
+            return redirect()->route('users.index')->with('success', 'User berhasil dihapus');
         } catch (\Exception $e) {
-            return redirect()
-                ->route('users.index')
-                ->with('error', 'Gagal menghapus user: ' . $e->getMessage());
+            return redirect()->route('users.index')->with('error', 'Gagal menghapus user: ' . $e->getMessage());
         }
     }
 }

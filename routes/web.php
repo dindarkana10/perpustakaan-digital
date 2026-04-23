@@ -3,157 +3,102 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Middleware\RoleMiddleware;
 use App\Models\User;
-use App\Models\Alat;
+use App\Models\Buku;
 use App\Models\Peminjaman;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\KategoriController;
-use App\Http\Controllers\Admin\AlatController;
+use App\Http\Controllers\Admin\KategoriBukuController;
+use App\Http\Controllers\Admin\BukuController;
 use App\Http\Controllers\Admin\PeminjamanController;
+use App\Http\Controllers\Admin\PengembalianController;
 use App\Http\Controllers\Admin\LogAktivitasController;
-use App\Http\Controllers\Petugas\PetugasPeminjamanController;
-use App\Http\Controllers\Petugas\PetugasPengembalianController;
+use App\Http\Controllers\Admin\LaporanController;
+use App\Http\Controllers\Peminjam\PeminjamPeminjamanController;
 use App\Http\Controllers\Peminjam\PeminjamPengembalianController;
-use App\Http\Controllers\Petugas\PetugasLaporanController;
-
-Route::get('/defaultroute', function () {
-    return view('welcome');
-});
+use App\Http\Controllers\Peminjam\DaftarBukuController;
 
 Route::get('/', function () {
     return redirect()->route('login');
 });
 
 Route::get('/dashboard', function () {
-    return view('dashboard');
+    if (Auth::user()->role === 'admin') return redirect()->route('admin.dashboard');
+    return redirect()->route('peminjam.dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-//ROLE ADMIN
-Route::middleware(['auth', 'role:admin'])->group(function () {
+// ===================== ROLE ADMIN =====================
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
 
-Route::get('/admin/dashboard', function () {
-    return view('admin.dashboard', [
-        'totalUser' => User::count(),
-        'totalAlat' => Alat::count(),
+    Route::get('/dashboard', function () {
+        return view('admin.dashboard', [
+            'totalUser'              => User::count(),
+            'totalBuku'              => Buku::count(),
+            'totalPeminjaman'        => Peminjaman::count(),
+            'peminjamanMenunggu'     => Peminjaman::where('status', 'menunggu_persetujuan')->count(),
+            'peminjamanDipinjam'     => Peminjaman::where('status', 'dipinjam')->count(),
+            'peminjamanDikembalikan' => Peminjaman::where('status', 'dikembalikan')->count(),
+            'peminjamanTerlambat'    => Peminjaman::where('status', 'terlambat')->count(),
+        ]);
+    })->name('admin.dashboard');
 
-        // Statistik Peminjaman
-        'totalPeminjaman' => Peminjaman::count(),
-        'peminjamanDipinjam' => Peminjaman::where('status', 'dipinjam')->count(),
-        'peminjamanDikembalikan' => Peminjaman::where('status', 'dikembalikan')->count(),
-        'peminjamanTerlambat' => Peminjaman::where('status', 'terlambat')->count(),
-    ]);
-})->name('admin.dashboard');
+    Route::resource('users', UserController::class);
+    Route::resource('kategoris', KategoriBukuController::class);
+    Route::resource('bukus', BukuController::class);
 
-    Route::resource('/admin/users', UserController::class)->names('users');
-    Route::resource('/admin/kategoris', KategoriController::class)->names('kategoris');
-    Route::resource('/admin/alats', AlatController::class)->names('alats');
-    Route::resource('/admin/peminjaman', PeminjamanController::class)->names('admin.peminjaman');
-    Route::resource('/admin/pengembalian', App\Http\Controllers\Admin\PengembalianController::class)->names('admin.pengembalian');
-    Route::get('/admin/log-aktivitas', [LogAktivitasController::class, 'index'])->name('admin.log-aktivitas.index');
-    Route::delete('/admin/log-aktivitas/delete-all', [LogAktivitasController::class, 'deleteAll'])->name('admin.log-aktivitas.deleteAll');
+    // ---- Peminjaman Admin ----
+    Route::resource('peminjaman', PeminjamanController::class)->names('admin.peminjaman');
+    Route::post('peminjaman/{id}/approve', [PeminjamanController::class, 'approve'])->name('admin.peminjaman.approve');
+    Route::post('peminjaman/{id}/reject',  [PeminjamanController::class, 'reject'])->name('admin.peminjaman.reject');
+
+    // ---- Pengembalian Admin ----
+    // ⚠️ PENTING: Route statis (riwayat, lunasi, download-struk) HARUS didaftarkan
+    //    SEBELUM Route::resource agar tidak tertangkap sebagai parameter {pengembalian}.
+
+    // ---- Struk Admin ----
+    Route::get( 'pengembalian/{id}/show-struk',    [PengembalianController::class, 'showStruk'])    ->name('admin.pengembalian.show-struk');
+    Route::get( 'pengembalian/{id}/download-struk',[PengembalianController::class, 'downloadStruk'])->name('admin.pengembalian.download-struk');
+    Route::post('pengembalian/{id}/kirim-struk',   [PengembalianController::class, 'kirimStruk'])   ->name('admin.pengembalian.kirim-struk');
+
+    Route::get( 'pengembalian/riwayat', [PengembalianController::class, 'riwayat'])->name('admin.pengembalian.riwayat');
+    Route::get( 'pengembalian/{id}/preview-konfirmasi', [PengembalianController::class, 'previewKonfirmasi']) ->name('admin.pengembalian.preview-konfirmasi');
+    Route::post('pengembalian/{id}/konfirmasi', [PengembalianController::class, 'konfirmasi'])->name('admin.pengembalian.konfirmasi');
+    Route::post('pengembalian/{id}/lunasi',  [PengembalianController::class, 'lunasi'])->name('admin.pengembalian.lunasi');
+    Route::get( 'pengembalian/{id}/download-struk',  [PengembalianController::class, 'downloadStruk']) ->name('admin.pengembalian.download-struk');
+
+    // Resource didaftarkan SETELAH route statis di atas
+    Route::resource('pengembalian', PengembalianController::class)->names('admin.pengembalian');
+
+    // ---- Log Aktivitas ----
+    Route::get(   'log-aktivitas',            [LogAktivitasController::class, 'index'])     ->name('admin.log-aktivitas.index');
+    Route::delete('log-aktivitas/delete-all', [LogAktivitasController::class, 'deleteAll']) ->name('admin.log-aktivitas.deleteAll');
+
+    // ---- Laporan ----
+    Route::get('laporan', [LaporanController::class, 'index'])->name('admin.laporan.index');
+    Route::get('laporan/pdf', [LaporanController::class, 'exportPdf'])->name('admin.laporan.pdf');
 });
 
-//ROLE PETUGAS
-Route::middleware(['auth', 'role:petugas'])->prefix('petugas')->name('petugas.')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('petugas.dashboard', [
-        'totalPeminjaman' => Peminjaman::count(),
-        'menunggu' => Peminjaman::where('status', 'menunggu_persetujuan')->count(),
-        'dipinjam' => Peminjaman::where('status', 'dipinjam')->count(),
-        'terlambat' => Peminjaman::where('status', 'terlambat')->count(),
-        'menungguPengembalian' => \App\Models\Pengembalian::where('status_pengembalian', 'diajukan')->count(),
-        ]);
-    })->name('dashboard');
-
-    // Resource route untuk CRUD dasar
-    Route::resource('peminjaman', PetugasPeminjamanController::class);
-    
-    // Route khusus untuk approval
-    Route::post('peminjaman/{id}/approve', [PetugasPeminjamanController::class, 'approve'])
-        ->name('peminjaman.approve');
-    Route::post('peminjaman/{id}/reject', [PetugasPeminjamanController::class, 'reject'])
-        ->name('peminjaman.reject');
-    Route::post('peminjaman/{id}/pengembalian', [PetugasPeminjamanController::class, 'pengembalian'])
-        ->name('peminjaman.pengembalian');
-
-     // Route pengembalian
-    Route::get('pengembalian', [App\Http\Controllers\Petugas\PetugasPengembalianController::class, 'index'])
-        ->name('pengembalian.index');
-    // Validasi pengembalian
-    Route::post('pengembalian/{id}/konfirmasi', [PetugasPengembalianController::class, 'konfirmasi'])
-        ->name('pengembalian.konfirmasi');
-    // Tandai lunas
-    Route::post('pengembalian/{id}/lunasi', [PetugasPengembalianController::class, 'lunasi'])
-        ->name('pengembalian.lunasi');
-
-    // Route::get('pengembalian/{id}', [App\Http\Controllers\Petugas\PetugasPengembalianController::class, 'show'])
-    //     ->name('pengembalian.show');
-    // Route::post('pengembalian/{id}/konfirmasi', [App\Http\Controllers\Petugas\PetugasPengembalianController::class, 'konfirmasi'])
-    //     ->name('pengembalian.konfirmasi');
-    // Route::put('pengembalian/{id}/toggle-pembayaran', [PetugasPengembalianController::class, 'togglePembayaran'])
-    // ->name('pengembalian.toggle-pembayaran');
-    Route::get('pengembalian-riwayat', [App\Http\Controllers\Petugas\PetugasPengembalianController::class, 'riwayat'])
-        ->name('pengembalian.riwayat');
-
-    // Show detail (JSON untuk modal)
-    Route::get('pengembalian/{id}/show', [PetugasPengembalianController::class, 'show'])
-        ->name('pengembalian.show');
-
-    // Download PDF struk
-    Route::get('pengembalian/{id}/download-struk', [PetugasPengembalianController::class, 'downloadStruk'])
-        ->name('pengembalian.download-struk');
-
-    // Kirim struk via email
-    Route::post('pengembalian/{id}/kirim-struk', [PetugasPengembalianController::class, 'kirimStruk'])
-        ->name('pengembalian.kirim-struk');
-
-    // Route laporan
-    Route::get('laporan', [PetugasLaporanController::class, 'index'])
-    ->name('laporan.index');
-
-    // Preview sebelum export
-    Route::post('laporan/peminjaman/preview', [PetugasLaporanController::class, 'previewPeminjaman'])
-        ->name('laporan.peminjaman.preview');
-    Route::post('laporan/pengembalian/preview', [PetugasLaporanController::class, 'previewPengembalian'])
-        ->name('laporan.pengembalian.preview');
-
-    // Export PDF
-    Route::post('laporan/peminjaman/export', [PetugasLaporanController::class, 'exportPeminjaman'])
-        ->name('laporan.peminjaman.export');
-    Route::post('laporan/pengembalian/export', [PetugasLaporanController::class, 'exportPengembalian'])
-        ->name('laporan.pengembalian.export');
-    });
-
-//ROLE PEMINJAM
+// ===================== ROLE PEMINJAM =====================
 Route::middleware(['auth', 'role:peminjam'])->group(function () {
 
     Route::get('/peminjam/dashboard', function () {
         $userId = Auth::id();
-
         return view('peminjam.dashboard', [
-            'peminjamanMenunggu' => Peminjaman::where('user_id', $userId)
-                ->where('status', 'menunggu_persetujuan')->count(),
-            'peminjamanDipinjam' => Peminjaman::where('user_id', $userId)
-                ->where('status', 'dipinjam')->count(),
-            'peminjamanDikembalikan' => Peminjaman::where('user_id', $userId)
-                ->where('status', 'dikembalikan')->count(),
-                ]);
+            'peminjamanMenunggu'     => Peminjaman::where('user_id', $userId)->where('status', 'menunggu_persetujuan')->count(),
+            'peminjamanDipinjam'     => Peminjaman::where('user_id', $userId)->where('status', 'dipinjam')->count(),
+            'peminjamanDikembalikan' => Peminjaman::where('user_id', $userId)->where('status', 'dikembalikan')->count(),
+        ]);
     })->name('peminjam.dashboard');
 
-    // Route untuk daftar alat
-    Route::get('/alat', [App\Http\Controllers\Peminjam\DaftarAlatController::class, 'index'])->name('alat.index');
-    // Route untuk peminjaman
-    Route::resource('peminjaman', App\Http\Controllers\Peminjam\PeminjamPeminjamanController::class);
-    //Route untuk pengembalian
+    Route::get('/buku', [DaftarBukuController::class, 'index'])->name('buku.index');
+    Route::resource('peminjaman',   PeminjamPeminjamanController::class)->names('peminjam.peminjaman');
     Route::resource('pengembalian', PeminjamPengembalianController::class);
-
 });
- 
+
+// ===================== PROFILE =====================
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get(   '/profile', [ProfileController::class, 'edit'])    ->name('profile.edit');
+    Route::patch( '/profile', [ProfileController::class, 'update'])  ->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy']) ->name('profile.destroy');
 });
 
 require __DIR__.'/auth.php';

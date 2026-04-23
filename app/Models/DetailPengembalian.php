@@ -13,10 +13,11 @@ class DetailPengembalian extends Model
 
     protected $fillable = [
         'pengembalian_id',
-        'alat_id',
+        'buku_id',
         'jumlah_kembali',
         'kondisi_kembali',
         'keterangan_kondisi',
+        'denda_kerusakan_buku',
         'biaya_perbaikan',
         'biaya_penggantian'
     ];
@@ -26,8 +27,8 @@ class DetailPengembalian extends Model
         return $this->belongsTo(Pengembalian::class);
     }
 
-    public function alat()
+    public function buku()
     {
-        return $this->belongsTo(Alat::class);
+        return $this->belongsTo(Buku::class);
     }
 }

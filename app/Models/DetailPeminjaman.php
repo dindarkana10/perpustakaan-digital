@@ -13,7 +13,7 @@ class DetailPeminjaman extends Model
 
     protected $fillable = [
         'peminjaman_id',
-        'alat_id',
+        'buku_id',
         'jumlah',
         'kondisi_pinjam',
     ];
@@ -28,10 +28,10 @@ class DetailPeminjaman extends Model
         return $this->belongsTo(Peminjaman::class, 'peminjaman_id');
     }
 
-    // Relasi ke Alat
-    public function alat()
+    // Relasi ke Buku
+    public function buku()
     {
-        return $this->belongsTo(Alat::class, 'alat_id');
+        return $this->belongsTo(Buku::class, 'buku_id');
     }
 
     // Accessor untuk badge kondisi

@@ -1,39 +1,26 @@
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Riwayat Peminjaman - Peminjam</title>
+  <title>Riwayat Pinjam - Perpustakaan Digital</title>
   <link rel="stylesheet" href="{{ asset ('template/css/styles.min.css') }}" />
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 </head>
-
 <body>
   <div class="page-wrapper" id="main-wrapper" data-layout="vertical" data-navbarbg="skin6" data-sidebartype="full"
     data-sidebar-position="fixed" data-header-position="fixed">
-
     <x-navbar></x-navbar>
     <x-sidebar></x-sidebar>
-
     <div class="body-wrapper">
       <div class="container-fluid">
-
         <div class="card">
           <div class="card-body">
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h5 class="card-title fw-semibold">Riwayat Peminjaman Saya</h5>
-              <div>
-                <a href="{{ route('alat.index') }}" class="btn btn-outline-secondary me-2">
-                  <iconify-icon icon="solar:box-outline" width="18" class="me-1"></iconify-icon>
-                  Daftar Alat
-                </a>
-                <a href="{{ route('peminjaman.create') }}" class="btn btn-primary">
-                  <iconify-icon icon="solar:add-circle-outline" width="18" class="me-1"></iconify-icon>
-                  Ajukan Peminjaman
-                </a>
-              </div>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h5 class="card-title fw-semibold">Riwayat Peminjaman Buku Saya</h5>
+              <a href="{{ route('peminjam.peminjaman.create') }}" class="btn btn-primary">
+                <iconify-icon icon="solar:add-circle-outline" width="18" class="me-1"></iconify-icon> Pinjam Buku Baru
+              </a>
             </div>
 
             @if (session('success'))
@@ -42,7 +29,6 @@
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
               </div>
             @endif
-
             @if (session('error'))
               <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 {{ session('error') }}
@@ -51,41 +37,52 @@
             @endif
 
             <div class="table-responsive">
-              <table id="peminjamanTable" class="table table-bordered table-striped">
+              <table id="peminjamanTable" class="table table-bordered table-striped align-middle">
                 <thead class="table-light">
                   <tr>
                     <th>No</th>
-                    <th>Tanggal Pinjam</th>
-                    <th>Tanggal Kembali</th>
-                    {{-- <th>Keperluan</th> --}}
-                    <th>Disetujui Oleh</th>
+                    <th>Buku</th>
+                    <th>Tgl Pinjam</th>
+                    <th>Tgl Kembali</th>
                     <th>Status</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  @forelse ($peminjaman as $item)
+                  @foreach ($peminjaman as $item)
                     <tr>
                       <td>{{ $loop->iteration }}</td>
+                      <td>
+                        @foreach($item->details as $detail)
+                          <div class="d-flex align-items-center gap-2 mb-1">
+                            {{-- Thumbnail gambar buku --}}
+                            @if($detail->buku->gambar)
+                              <img src="{{ asset('storage/bukus/' . $detail->buku->gambar) }}"
+                                   alt="{{ $detail->buku->judul_buku }}"
+                                   class="rounded"
+                                   style="width:36px; height:48px; object-fit:cover; cursor:pointer; border:1px solid #dee2e6;"
+                                   data-bs-toggle="tooltip"
+                                   title="{{ $detail->buku->judul_buku }}"
+                                   onclick="previewGambar('{{ asset('storage/' . $detail->buku->gambar) }}', '{{ $detail->buku->judul_buku }}')">
+                            @else
+                              <div class="rounded d-flex align-items-center justify-content-center bg-light border"
+                                   style="width:36px; height:48px; min-width:36px;">
+                                <iconify-icon icon="solar:book-outline" width="18" class="text-muted"></iconify-icon>
+                              </div>
+                            @endif
+                            <span class="badge bg-light text-dark">{{ $detail->buku->judul_buku }} ({{ $detail->jumlah }})</span>
+                          </div>
+                        @endforeach
+                      </td>
                       <td>{{ \Carbon\Carbon::parse($item->tanggal_pinjam)->format('d/m/Y') }}</td>
                       <td>{{ \Carbon\Carbon::parse($item->tanggal_kembali_rencana)->format('d/m/Y') }}</td>
-                      {{-- <td>{{ Str::limit($item->keperluan, 40) }}</td> --}}
-                      <td>
-                        @if($item->petugas)
-                          {{ $item->petugas->name }}
-                        @else
-                          <span class="text-muted">-</span>
-                        @endif
-                      </td>
                       <td>
                         @if($item->status == 'menunggu_persetujuan')
                           <span class="badge bg-info text-white">Menunggu Persetujuan</span>
-                        @elseif($item->status == 'disetujui')
-                          <span class="badge bg-primary">Disetujui</span>
                         @elseif($item->status == 'dipinjam')
-                          <span class="badge bg-warning text-dark">Dipinjam</span>
+                          <span class="badge bg-warning text-dark">Sedang Dipinjam</span>
                         @elseif($item->status == 'dikembalikan')
-                          <span class="badge bg-success">Dikembalikan</span>
+                          <span class="badge bg-success">Sudah Kembali</span>
                         @elseif($item->status == 'ditolak')
                           <span class="badge bg-danger">Ditolak</span>
                         @else
@@ -93,16 +90,15 @@
                         @endif
                       </td>
                       <td class="text-center">
-                        <!-- Tombol Detail (selalu ada) -->
-                        <button type="button" class="btn btn-sm btn-outline-info me-1 showBtn" data-id="{{ $item->id }}">
+                        <button type="button" class="btn btn-sm btn-outline-info showBtn" data-id="{{ $item->id }}" title="Detail">
                           <iconify-icon icon="solar:eye-outline" width="18"></iconify-icon>
                         </button>
-
-                        <!-- Tombol Batalkan (hanya untuk status menunggu persetujuan) -->
                         @if($item->status == 'menunggu_persetujuan')
-                          <form action="{{ route('peminjaman.destroy', $item->id) }}" method="POST" class="d-inline deleteForm">
-                            @csrf
-                            @method('DELETE')
+                          <a href="{{ route('peminjam.peminjaman.edit', $item->id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
+                            <iconify-icon icon="solar:pen-new-square-outline" width="18"></iconify-icon>
+                          </a>
+                          <form action="{{ route('peminjam.peminjaman.destroy', $item->id) }}" method="POST" class="d-inline deleteForm">
+                            @csrf @method('DELETE')
                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Batalkan">
                               <iconify-icon icon="solar:close-circle-outline" width="18"></iconify-icon>
                             </button>
@@ -110,78 +106,44 @@
                         @endif
                       </td>
                     </tr>
-                  @empty
-                    <tr>
-                      <td colspan="7" class="text-center">Belum ada riwayat peminjaman</td>
-                    </tr>
-                  @endforelse
+                  @endforeach
                 </tbody>
               </table>
             </div>
-
           </div>
         </div>
-
       </div>
     </div>
   </div>
 
-  <!-- Modal Detail Peminjaman -->
+  {{-- ============ MODAL DETAIL (SHOW) ============ --}}
   <div class="modal fade" id="showPeminjamanModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Detail Peminjaman</h5>
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold">Detail Peminjaman Saya</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body">
-          <div class="row">
-            <div class="col-md-3 mb-3">
-              <label class="form-label">Tanggal Pinjam</label>
-              <input type="text" class="form-control" id="show_tanggal_pinjam" readonly>
-            </div>
-            <div class="col-md-3 mb-3">
-              <label class="form-label">Tanggal Kembali</label>
-              <input type="text" class="form-control" id="show_tanggal_kembali" readonly>
-            </div>
-            <div class="col-md-3 mb-3">
-              <label class="form-label">Disetujui Oleh</label>
-              <input type="text" class="form-control" id="show_petugas" readonly>
-            </div>
-            <div class="col-md-3 mb-3">
-              <label class="form-label">Status</label>
-              <input type="text" class="form-control" id="show_status" readonly>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="col-md-12 mb-3">
-              <label class="form-label">Keperluan</label>
-              <textarea class="form-control" id="show_keperluan" rows="2" readonly></textarea>
-            </div>
-          </div>
-
-          <hr>
-          <h6 class="mb-3">Detail Alat yang Dipinjam</h6>
-          <div class="table-responsive">
-            <table class="table table-bordered">
-              <thead class="table-light">
-                <tr>
-                  <th>No</th>
-                  <th>Nama Alat</th>
-                  <th>Kategori</th>
-                  <th>Jumlah</th>
-                  <th>Harga</th>
-                  <th>Kondisi Pinjam</th>
-                </tr>
-              </thead>
-              <tbody id="show_detail_alat">
-              </tbody>
-            </table>
-          </div>
+        <div class="modal-body p-4">
+          <div id="detailContent">Memuat...</div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{-- ============ MODAL PREVIEW GAMBAR ============ --}}
+  <div class="modal fade" id="previewGambarModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h6 class="modal-title fw-semibold" id="previewGambarTitle"></h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center p-2">
+          <img id="previewGambarImg" src="" alt="" class="img-fluid rounded" style="max-height:400px;">
         </div>
       </div>
     </div>
@@ -189,131 +151,130 @@
 
   <script src="{{ asset ('template/libs/jquery/dist/jquery.min.js') }}"></script>
   <script src="{{ asset ('template/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
-  <script src="{{ asset ('template/js/sidebarmenu.js') }}"></script>
   <script src="{{ asset ('template/js/app.min.js') }}"></script>
-  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
   <script>
-    function formatRupiah(angka) {
-      return 'Rp ' + Number(angka).toLocaleString('id-ID');
+    /* ---- Helper: buka modal preview gambar ---- */
+    function previewGambar(src, judul) {
+      document.getElementById('previewGambarImg').src = src;
+      document.getElementById('previewGambarTitle').textContent = judul;
+      new bootstrap.Modal(document.getElementById('previewGambarModal')).show();
     }
 
-  $(document).ready(function () {
+    /* ---- Helper: badge status ---- */
+    function badgeStatus(status) {
+      const map = {
+        menunggu_persetujuan : '<span class="badge bg-info text-white">Menunggu Persetujuan</span>',
+        dipinjam             : '<span class="badge bg-warning text-dark">Sedang Dipinjam</span>',
+        dikembalikan         : '<span class="badge bg-success">Sudah Kembali</span>',
+        ditolak              : '<span class="badge bg-danger">Ditolak</span>',
+      };
+      return map[status] ?? '<span class="badge bg-dark">Terlambat</span>';
+    }
 
-    /* ================= DATATABLE ================= */
-    $('#peminjamanTable').DataTable({
-      language: { 
-        url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/id.json',
-        emptyTable: 'Belum ada riwayat peminjaman',
-        zeroRecords: 'Tidak ada data yang cocok'
-      },
-      pageLength: 10,
-      order: [],
-      columnDefs: [
-        { orderable: false, targets: [5] }
-      ]
-    });
+    $(document).ready(function () {
+      /* Init DataTable */
+      $('#peminjamanTable').DataTable();
 
-    /* ================= SHOW DETAIL ================= */
-    $(document).on('click', '.showBtn', function () {
-      let id = $(this).data('id');
-      
-      $.ajax({
-        url: '/peminjaman/' + id,
-        type: 'GET',
-        success: function(response) {
-          $('#show_tanggal_pinjam').val(new Date(response.tanggal_pinjam).toLocaleDateString('id-ID'));
-          $('#show_tanggal_kembali').val(new Date(response.tanggal_kembali_rencana).toLocaleDateString('id-ID'));
-          
-          if (response.petugas) {
-            $('#show_petugas').val(response.petugas.name);
-          } else {
-            $('#show_petugas').val('-');
-          }
-          
-          $('#show_keperluan').val(response.keperluan);
-          
-          let statusBadge = '';
-          if (response.status === 'menunggu_persetujuan') {
-            statusBadge = 'Menunggu Persetujuan';
-          } else if (response.status === 'disetujui') {
-            statusBadge = 'Disetujui';
-          } else if (response.status === 'dipinjam') {
-            statusBadge = 'Dipinjam';
-          } else if (response.status === 'dikembalikan') {
-            statusBadge = 'Dikembalikan';
-          } else if (response.status === 'ditolak') {
-            statusBadge = 'Ditolak';
-          } else {
-            statusBadge = 'Terlambat';
-          }
-          $('#show_status').val(statusBadge);
-          
-          let detailHtml = '';
-            response.details.forEach(function(detail, index) {
+      /* Init tooltips */
+      $('[data-bs-toggle="tooltip"]').tooltip();
 
-            let kondisiBadge = '';
-            if (detail.kondisi_pinjam === 'baik') {
-              kondisiBadge = '<span class="badge bg-success">Baik</span>';
-            } else if (detail.kondisi_pinjam === 'rusak_ringan') {
-              kondisiBadge = '<span class="badge bg-warning">Rusak Ringan</span>';
-            } else {
-              kondisiBadge = '<span class="badge bg-danger">Rusak Berat</span>';
-            }
+      /* ---- SHOW DETAIL ---- */
+      $('.showBtn').click(function () {
+        const id  = $(this).data('id');
+        const url = "{{ route('peminjam.peminjaman.show', ':id') }}".replace(':id', id);
 
-            let harga = detail.alat.harga_beli
-              ? formatRupiah(detail.alat.harga_beli)
-              : '-';
+        $('#showPeminjamanModal').modal('show');
+        $('#detailContent').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Memuat data...</p></div>');
 
-            detailHtml += `
+        $.get(url, function (data) {
+          /* Baris buku dengan gambar */
+          let bukuRows = '';
+          data.details.forEach(d => {
+            const gambarHtml = d.buku.gambar
+              ? `<img src="/storage/bukus/${d.buku.gambar}"
+                      alt="${d.buku.judul_buku}"
+                      class="rounded me-2"
+                      style="width:48px;height:64px;object-fit:cover;cursor:pointer;border:1px solid #dee2e6;"
+                      onclick="previewGambar('/storage/${d.buku.gambar}','${d.buku.judul_buku}')">`
+              : `<div class="rounded me-2 d-inline-flex align-items-center justify-content-center bg-light border"
+                      style="width:48px;height:64px;min-width:48px;">
+                   <span style="font-size:10px;color:#aaa;">No Img</span>
+                 </div>`;
+
+            bukuRows += `
               <tr>
-                <td>${index + 1}</td>
-                <td>${detail.alat.nama_alat}</td>
-                <td>${detail.alat.kategori.nama_kategori}</td>
-                <td class="text-center">${detail.jumlah}</td>
-                <td class="text-center fw-semibold">${harga}</td>
-                <td>${kondisiBadge}</td>
-              </tr>
-            `;
+                <td>
+                  <div class="d-flex align-items-center">
+                    ${gambarHtml}
+                    <span>${d.buku.judul_buku}</span>
+                  </div>
+                </td>
+                <td class="text-center">${d.jumlah}</td>
+                <td class="text-center"><span class="badge bg-secondary">${d.kondisi_pinjam}</span></td>
+              </tr>`;
           });
 
-          $('#show_detail_alat').html(detailHtml);
-          
-          $('#showPeminjamanModal').modal('show');
-        },
-        error: function() {
-          Swal.fire('Error!', 'Gagal mengambil data peminjaman', 'error');
-        }
+          const html = `
+            <div class="row mb-3">
+              <div class="col-md-6 border-end">
+                <h6 class="fw-bold text-primary mb-3">Informasi Waktu</h6>
+                <p class="mb-1 text-muted fs-2">Tanggal Pinjam:</p>
+                <p class="fw-semibold mb-3">${data.tanggal_pinjam}</p>
+                <p class="mb-1 text-muted fs-2">Rencana Kembali:</p>
+                <p class="fw-semibold">${data.tanggal_kembali_rencana}</p>
+              </div>
+              <div class="col-md-6 ps-md-4">
+                <h6 class="fw-bold text-primary mb-3">Status</h6>
+                <p class="mb-1 text-muted fs-2">Status:</p>
+                <p class="fw-semibold mb-3">${badgeStatus(data.status)}</p>
+              </div>
+            </div>
+            <div class="mb-4 bg-light p-3 rounded">
+              <h6 class="fw-bold text-primary mb-2">Keperluan:</h6>
+              <p class="mb-0 text-muted fs-3" style="text-align:justify;">${data.keperluan || 'Tidak ada keterangan.'}</p>
+            </div>
+            <h6 class="fw-bold text-primary mb-3">Buku yang Dipinjam:</h6>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Judul Buku</th>
+                    <th class="text-center">Jumlah</th>
+                    <th class="text-center">Kondisi Saat Pinjam</th>
+                  </tr>
+                </thead>
+                <tbody>${bukuRows}</tbody>
+              </table>
+            </div>`;
+
+          $('#detailContent').html(html);
+        });
       });
-    });
 
-    /* ================= DELETE CONFIRM ================= */
-    $(document).on('submit', '.deleteForm', function (e) {
-      e.preventDefault();
-      const form = this;
-
-      Swal.fire({
-        title: 'Batalkan Peminjaman?',
-        text: 'Pengajuan peminjaman akan dibatalkan!',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonText: 'Tidak',
-        confirmButtonText: 'Ya, Batalkan'
-      }).then((result) => {
-        if (result.isConfirmed) form.submit();
+      /* ---- KONFIRMASI DELETE ---- */
+      $('.deleteForm').submit(function (e) {
+        e.preventDefault();
+        const form = this;
+        Swal.fire({
+          title: 'Batalkan Peminjaman?',
+          text: 'Anda tidak dapat mengembalikan ini!',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'Ya, Batalkan!',
+          cancelButtonText: 'Batal'
+        }).then(result => { if (result.isConfirmed) form.submit(); });
       });
+
+      /* ---- AUTO HIDE ALERT ---- */
+      setTimeout(() => $('.alert').fadeOut(), 3000);
     });
-
-    /* ================= AUTO HIDE ALERT ================= */
-    setTimeout(() => $('.alert').fadeOut(), 3000);
-
-  });
   </script>
-
 </body>
-
 </html>

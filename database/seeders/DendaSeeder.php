@@ -16,7 +16,7 @@ class DendaSeeder extends Seeder
         Denda::firstOrCreate(
             [], // pastikan hanya 1 data
             [
-                'denda_per_hari' => 5000,
+                'denda_per_hari' => 1000,
                 'denda_rusak_ringan' => 10,
                 'denda_rusak_berat' => 50,
                 'persentase_penggantian_hilang' => 100

@@ -14,31 +14,39 @@ use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
 {
-    /**
-     * Display the registration view.
-     */
     public function create(): View
     {
         return view('auth.register');
     }
 
-    /**
-     * Handle an incoming registration request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'role' => ['required', 'in:admin,peminjam'],
+            // Validasi kondisional
+            'NISN' => ['required_if:role,peminjam', 'nullable', 'string', 'size:10', 'unique:users,NISN'],
+            'kelas_jurusan' => ['required_if:role,peminjam', 'nullable', 'string'],
+            'admin_key' => ['required_if:role,admin', 'nullable', 'string'],
         ]);
+
+        // Cek jika mendaftar sebagai admin, kuncinya harus benar
+        if ($request->role === 'admin') {
+            $secretKey = "PERPUS-SMKN1-CIOMAS"; // Ganti dengan kode rahasia pilihanmu
+            if ($request->admin_key !== $secretKey) {
+                return back()->withErrors(['admin_key' => 'Kode Registrasi Admin tidak valid!'])->withInput();
+            }
+        }
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'NISN' => $request->role === 'peminjam' ? $request->NISN : null,
+            'kelas_jurusan' => $request->role === 'peminjam' ? $request->kelas_jurusan : null,
         ]);
 
         event(new Registered($user));

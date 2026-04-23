@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('dendas', function (Blueprint $table) {
             $table->id();
-            $table->decimal('denda_per_hari', 10, 2)->default(5000);
+            $table->decimal('denda_per_hari', 10, 2)->default(1000);
             $table->integer('denda_rusak_ringan')->default(10);
             $table->integer('denda_rusak_berat')->default(50);
             $table->integer('persentase_penggantian_hilang')->default(100);

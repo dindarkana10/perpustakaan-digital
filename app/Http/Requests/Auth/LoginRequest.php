@@ -8,57 +8,46 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
 
 class LoginRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'email'    => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ];
     }
 
-    /**
-     * Attempt to authenticate the request's credentials.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
     public function authenticate(): void
     {
         $this->ensureIsNotRateLimited();
 
-        // Cek apakah email terdaftar di database
-        $user = \App\Models\User::where('email', $this->email)->first();
+        // Cek apakah email ada di database
+        $user = User::where('email', $this->email)->first();
 
         if (! $user) {
             RateLimiter::hit($this->throttleKey());
-
             throw ValidationException::withMessages([
-                'email' => 'Alamat email tidak ada. Periksa kembali email Anda.',
+                'email' => 'Alamat email tidak terdaftar di sistem.',
             ]);
         }
 
-        // Cek password
+        // Khusus role peminjam: email harus sungguhan (ada di DB = cukup)
+        // Admin tidak perlu email sungguhan, login tetap bisa
+        // Validasi ini hanya memastikan email ADA di tabel users
+
         if (! Auth::attempt(
             $this->only('email', 'password'),
             $this->boolean('remember')
         )) {
             RateLimiter::hit($this->throttleKey());
-
             throw ValidationException::withMessages([
                 'email' => 'Password yang Anda masukkan salah.',
             ]);
@@ -67,11 +56,6 @@ class LoginRequest extends FormRequest
         RateLimiter::clear($this->throttleKey());
     }
 
-    /**
-     * Ensure the login request is not rate limited.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
     public function ensureIsNotRateLimited(): void
     {
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
@@ -90,11 +74,8 @@ class LoginRequest extends FormRequest
         ]);
     }
 
-    /**
-     * Get the rate limiting throttle key for the request.
-     */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        return Str::transliterate(Str::lower($this->string('email')) . '|' . $this->ip());
     }
 }

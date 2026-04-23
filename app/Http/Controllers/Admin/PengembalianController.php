@@ -3,35 +3,59 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Models\Pengembalian;
 use App\Models\DetailPengembalian;
 use App\Models\Peminjaman;
-use App\Models\Alat;
+use App\Models\Denda;
 use App\Models\LogAktivitas;
-use Illuminate\Http\Request;
+use App\Mail\StrukPengembalianMail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
 class PengembalianController extends Controller
 {
     public function index()
     {
-        $pengembalians = Pengembalian::with(['peminjaman.user', 'peminjaman.details.alat', 'petugas'])
+        // Tampilkan semua yang belum selesai (belum lunas / tidak ada denda / diajukan)
+        $pengembalians = Pengembalian::with(['peminjaman.user', 'user'])
+            ->where(function($q) {
+                $q->whereIn('status_pembayaran', ['belum_lunas', 'tidak_ada_denda'])
+                  ->orWhere('status_pengembalian', 'diajukan');
+            })
             ->latest()
             ->get();
 
         return view('admin.pengembalian.index', compact('pengembalians'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        $peminjamans = Peminjaman::with(['user', 'details.alat'])
+        $peminjamans = Peminjaman::with('user')
             ->where('status', 'dipinjam')
-            ->whereDoesntHave('pengembalian')
             ->get();
 
-        return view('admin.pengembalian.create', compact('peminjamans'));
+        $selectedPeminjaman = null;
+        if ($request->peminjaman_id) {
+            $selectedPeminjaman = Peminjaman::with(['user', 'details.buku'])
+                ->findOrFail($request->peminjaman_id);
+        }
+
+        $dendaConfig = Denda::first();
+
+        $dendaPerHari = $dendaConfig->denda_per_hari                ?? 1000;
+        $persenRingan = $dendaConfig->denda_rusak_ringan            ?? 10;
+        $persenBerat  = $dendaConfig->denda_rusak_berat             ?? 50;
+        $persenHilang = $dendaConfig->persentase_penggantian_hilang ?? 100;
+        $tglRencana   = $selectedPeminjaman->tanggal_kembali_rencana ?? '';
+
+        return view('admin.pengembalian.create', compact(
+            'peminjamans', 'selectedPeminjaman', 'dendaConfig',
+            'dendaPerHari', 'persenRingan', 'persenBerat', 'persenHilang', 'tglRencana'
+        ));
     }
 
     public function store(Request $request)
@@ -39,268 +63,492 @@ class PengembalianController extends Controller
         $request->validate([
             'peminjaman_id'          => 'required|exists:peminjamen,id',
             'tanggal_kembali_aktual' => 'required|date',
+            'buku_id'                => 'required|array',
             'kondisi_kembali'        => 'required|array',
-            'kondisi_kembali.*'      => 'required|in:baik,rusak_ringan,rusak_berat,hilang',
-            'keterangan_kondisi'     => 'nullable|array',
-            'keterangan_kondisi.*'   => 'nullable|string|max:500',
+            'denda_kerusakan_buku'   => 'required|array',
         ]);
 
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
+            $peminjaman   = Peminjaman::with('user')->findOrFail($request->peminjaman_id);
+            $dendaConfig  = Denda::first();
+            $dendaPerHari = $dendaConfig->denda_per_hari ?? 5000;
 
-            $peminjaman = Peminjaman::with('details.alat', 'user')
-                ->where('id', $request->peminjaman_id)
-                ->where('status', 'dipinjam')
-                ->first();
+            $tglRencana = Carbon::parse($peminjaman->tanggal_kembali_rencana)->startOfDay();
+            $tglAktual  = Carbon::parse($request->tanggal_kembali_aktual)->startOfDay();
 
-            if (!$peminjaman) {
-                return redirect()->back()->with('error', 'Peminjaman tidak valid.');
+            $keterlambatan      = 0;
+            $dendaKeterlambatan = 0;
+
+            // ✅ FIX BUG #1: diffInDays harus dari rencana KE aktual
+            if ($tglAktual->gt($tglRencana)) {
+                $keterlambatan      = $tglRencana->diffInDays($tglAktual); // FIXED
+                $dendaKeterlambatan = $keterlambatan * $dendaPerHari;
             }
 
-            // Validasi setiap detail peminjaman harus punya kondisi kembali
-            foreach ($peminjaman->details as $detail) {
-                if (!isset($request->kondisi_kembali[$detail->id])) {
-                    return redirect()->back()
-                        ->with('error', 'Kondisi kembali untuk semua alat wajib diisi.')
-                        ->withInput();
-                }
-            }
+            $dendaKerusakanTotal = array_sum($request->denda_kerusakan_buku);
+            $totalDenda          = $dendaKeterlambatan + $dendaKerusakanTotal;
+            $statusPembayaran    = ($totalDenda > 0) ? 'belum_lunas' : 'tidak_ada_denda';
 
-            // Hitung keterlambatan
-            $tanggalRencana = Carbon::parse($peminjaman->tanggal_kembali_rencana)->startOfDay();
-            $tanggalAktual  = Carbon::parse($request->tanggal_kembali_aktual)->startOfDay();
-            $keterlambatan  = max(0, $tanggalAktual->diffInDays($tanggalRencana, false) * -1);
-
-            // Simpan pengembalian
             $pengembalian = Pengembalian::create([
-                'peminjaman_id'          => $request->peminjaman_id,
+                'peminjaman_id'          => $peminjaman->id,
+                'user_id'                => $peminjaman->user_id,
+                'petugas_id'             => Auth::id(),
                 'tanggal_kembali_aktual' => $request->tanggal_kembali_aktual,
                 'keterlambatan_hari'     => $keterlambatan,
-                'denda_keterlambatan'    => 0,
-                'denda_kerusakan'        => 0,
-                'total_denda'            => 0,
-                'status_pembayaran'      => 'belum_lunas',
-                'status_pengembalian'    => 'diajukan',
-                'petugas_id'             => Auth::id(),
+                'denda_keterlambatan'    => $dendaKeterlambatan,
+                'denda_kerusakan'        => $dendaKerusakanTotal,
+                'total_denda'            => $totalDenda,
+                'status_pembayaran'      => $statusPembayaran,
+                'status_pengembalian'    => 'dikonfirmasi',
             ]);
 
-            // Simpan detail kondisi kembali per alat + update stok
-            foreach ($peminjaman->details as $detail) {
-                $kondisiKembali    = $request->kondisi_kembali[$detail->id];
-                $keteranganKondisi = $request->keterangan_kondisi[$detail->id] ?? null;
-
+            foreach ($request->buku_id as $index => $buku_id) {
                 DetailPengembalian::create([
-                    'pengembalian_id'    => $pengembalian->id,
-                    'alat_id'            => $detail->alat_id,
-                    'jumlah_kembali'     => $detail->jumlah,
-                    'kondisi_kembali'    => $kondisiKembali,
-                    'keterangan_kondisi' => $keteranganKondisi,
-                    'biaya_perbaikan'    => 0,
-                    'biaya_penggantian'  => 0,
+                    'pengembalian_id'      => $pengembalian->id,
+                    'buku_id'              => $buku_id,
+                    'jumlah_kembali'       => $request->jumlah_kembali[$index] ?? 1,
+                    'kondisi_kembali'      => $request->kondisi_kembali[$index],
+                    'denda_kerusakan_buku' => $request->denda_kerusakan_buku[$index],
                 ]);
 
-                /**
-                 * Logika stok:
-                 * - baik / rusak_ringan → stok_tersedia bertambah
-                 * - rusak_berat / hilang → stok_total dikurangi, stok_tersedia TIDAK bertambah
-                 */
-                $alat = Alat::find($detail->alat_id);
-                if ($alat) {
-                    if (in_array($kondisiKembali, ['baik', 'rusak_ringan'])) {
-                        $alat->increment('stok_tersedia', $detail->jumlah);
-                    } elseif (in_array($kondisiKembali, ['rusak_berat', 'hilang'])) {
-                        $alat->decrement('stok_total', $detail->jumlah);
-                        if ($alat->stok_total < 0) {
-                            $alat->stok_total = 0;
-                        }
-                        if ($alat->stok_tersedia > $alat->stok_total) {
-                            $alat->stok_tersedia = $alat->stok_total;
-                        }
-                        $alat->save();
+                if (!in_array($request->kondisi_kembali[$index], ['hilang', 'rusak_berat'])) {
+                    $buku = \App\Models\Buku::find($buku_id);
+                    if ($buku) {
+                        $buku->increment('stok_tersedia', $request->jumlah_kembali[$index] ?? 1);
                     }
                 }
             }
 
-            LogAktivitas::record(
-                'Tambah Pengembalian',
-                'Pengembalian',
-                $pengembalian->id,
-                "Menambahkan pengembalian untuk peminjam: {$peminjaman->user->name} | Keterlambatan: {$keterlambatan} hari"
-            );
+            $peminjaman->update(['status' => 'dikembalikan']);
+
+            LogAktivitas::record('Input Pengembalian', 'Pengembalian', $pengembalian->id,
+                "Admin menginput pengembalian untuk " . $peminjaman->user->name);
 
             DB::commit();
-
             return redirect()->route('admin.pengembalian.index')
-                ->with('success', 'Pengembalian berhasil ditambahkan.');
+                ->with('success', 'Pengembalian berhasil dicatat.');
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', $e->getMessage())->withInput();
+            return redirect()->back()->with('error', $e->getMessage())->withInput();
         }
     }
 
-    public function show(string $id)
+    public function show($id)
     {
-        $pengembalian = Pengembalian::with([
-            'peminjaman.user',
-            'peminjaman.details.alat',
-            'details.alat',
-            'petugas',
-        ])->findOrFail($id);
-
+        $pengembalian = Pengembalian::with(['peminjaman.user', 'details.buku', 'petugas'])->findOrFail($id);
         return view('admin.pengembalian.show', compact('pengembalian'));
     }
 
-    public function edit(string $id)
+    public function edit($id)
     {
-        $pengembalian = Pengembalian::with(['peminjaman.details.alat', 'peminjaman.user', 'details'])
-            ->where('status_pengembalian', 'diajukan')
-            ->findOrFail($id);
+        $pengembalian = Pengembalian::with(['peminjaman.user', 'details.buku'])->findOrFail($id);
 
-        return view('admin.pengembalian.edit', compact('pengembalian'));
+        // ✅ FIX BUG #5: Blokir edit jika sudah dikonfirmasi
+        if ($pengembalian->status_pengembalian === 'dikonfirmasi') {
+            return redirect()->route('admin.pengembalian.index')
+                ->with('error', 'Pengembalian yang sudah dikonfirmasi tidak dapat diedit.');
+        }
+
+        $dendaConfig = Denda::first();
+        if (!$dendaConfig) {
+            $dendaConfig = (object)[
+                'denda_per_hari'                => 5000,
+                'denda_rusak_ringan'            => 10,
+                'denda_rusak_berat'             => 50,
+                'persentase_penggantian_hilang' => 100,
+            ];
+        }
+
+        return view('admin.pengembalian.edit', compact('pengembalian', 'dendaConfig'));
     }
 
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
         $request->validate([
             'tanggal_kembali_aktual' => 'required|date',
-            'kondisi_kembali'        => 'required|array',
-            'kondisi_kembali.*'      => 'required|in:baik,rusak_ringan,rusak_berat,hilang',
-            'keterangan_kondisi'     => 'nullable|array',
-            'keterangan_kondisi.*'   => 'nullable|string|max:500',
+            'denda_kerusakan_buku'   => 'required|array',
         ]);
 
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
+            $pengembalian = Pengembalian::findOrFail($id);
 
-            $pengembalian = Pengembalian::with('peminjaman.user', 'peminjaman.details.alat', 'details')
-                ->where('status_pengembalian', 'diajukan')
-                ->findOrFail($id);
-
-            $oldTanggal = $pengembalian->tanggal_kembali_aktual;
-
-            // ── Balikkan perubahan stok dari pengajuan sebelumnya ─────────────────
-            foreach ($pengembalian->details as $oldDetail) {
-                $alat = Alat::find($oldDetail->alat_id);
-                if (!$alat) continue;
-
-                $peminjamanDetail = $pengembalian->peminjaman->details
-                    ->firstWhere('alat_id', $oldDetail->alat_id);
-                $jumlah = $peminjamanDetail ? $peminjamanDetail->jumlah : $oldDetail->jumlah_kembali;
-
-                if (in_array($oldDetail->kondisi_kembali, ['baik', 'rusak_ringan'])) {
-                    $alat->decrement('stok_tersedia', $jumlah);
-                } elseif (in_array($oldDetail->kondisi_kembali, ['rusak_berat', 'hilang'])) {
-                    $alat->increment('stok_total', $jumlah);
-                }
+            if ($pengembalian->status_pengembalian === 'dikonfirmasi') {
+                throw new \Exception('Pengembalian yang sudah dikonfirmasi tidak dapat diubah.');
             }
 
-            // ── Hitung ulang keterlambatan ────────────────────────────────────────
-            $tanggalRencana = Carbon::parse($pengembalian->peminjaman->tanggal_kembali_rencana)->startOfDay();
-            $tanggalAktual  = Carbon::parse($request->tanggal_kembali_aktual)->startOfDay();
-            $keterlambatan  = max(0, $tanggalAktual->diffInDays($tanggalRencana, false) * -1);
+            $peminjaman   = $pengembalian->peminjaman;
+            $dendaConfig  = Denda::first();
+            $dendaPerHari = $dendaConfig->denda_per_hari ?? 5000;
+
+            $tglRencana = Carbon::parse($peminjaman->tanggal_kembali_rencana)->startOfDay();
+            $tglAktual  = Carbon::parse($request->tanggal_kembali_aktual)->startOfDay();
+
+            $keterlambatan      = 0;
+            $dendaKeterlambatan = 0;
+
+            // ✅ FIX BUG #1
+            if ($tglAktual->gt($tglRencana)) {
+                $keterlambatan      = $tglRencana->diffInDays($tglAktual);
+                $dendaKeterlambatan = $keterlambatan * $dendaPerHari;
+            }
+
+            $dendaKerusakanTotal = array_sum($request->denda_kerusakan_buku);
+            $totalDenda          = $dendaKeterlambatan + $dendaKerusakanTotal;
+
+            $statusPembayaran = $pengembalian->status_pembayaran;
+            if ($totalDenda == 0) {
+                $statusPembayaran = 'tidak_ada_denda';
+            } elseif ($statusPembayaran == 'tidak_ada_denda') {
+                $statusPembayaran = 'belum_lunas';
+            }
 
             $pengembalian->update([
                 'tanggal_kembali_aktual' => $request->tanggal_kembali_aktual,
                 'keterlambatan_hari'     => $keterlambatan,
+                'denda_keterlambatan'    => $dendaKeterlambatan,
+                'denda_kerusakan'        => $dendaKerusakanTotal,
+                'total_denda'            => $totalDenda,
+                'status_pembayaran'      => $statusPembayaran,
+                'petugas_id'             => Auth::id(),
             ]);
 
-            // ── Update detail kondisi & terapkan stok baru ────────────────────────
-            foreach ($pengembalian->peminjaman->details as $detail) {
-                $kondisiKembali    = $request->kondisi_kembali[$detail->id]    ?? 'baik';
-                $keteranganKondisi = $request->keterangan_kondisi[$detail->id] ?? null;
-
-                DetailPengembalian::updateOrCreate(
-                    [
-                        'pengembalian_id' => $pengembalian->id,
-                        'alat_id'         => $detail->alat_id,
-                    ],
-                    [
-                        'jumlah_kembali'     => $detail->jumlah,
-                        'kondisi_kembali'    => $kondisiKembali,
-                        'keterangan_kondisi' => $keteranganKondisi,
-                    ]
-                );
-
-                $alat = Alat::find($detail->alat_id);
-                if ($alat) {
-                    if (in_array($kondisiKembali, ['baik', 'rusak_ringan'])) {
-                        $alat->increment('stok_tersedia', $detail->jumlah);
-                    } elseif (in_array($kondisiKembali, ['rusak_berat', 'hilang'])) {
-                        $alat->decrement('stok_total', $detail->jumlah);
-                        if ($alat->stok_total < 0) $alat->stok_total = 0;
-                        if ($alat->stok_tersedia > $alat->stok_total) {
-                            $alat->stok_tersedia = $alat->stok_total;
-                        }
-                        $alat->save();
-                    }
+            foreach ($request->detail_id as $index => $detail_id) {
+                $detail = DetailPengembalian::find($detail_id);
+                if ($detail) {
+                    $detail->update([
+                        'kondisi_kembali'      => $request->kondisi_kembali[$index],
+                        'denda_kerusakan_buku' => $request->denda_kerusakan_buku[$index],
+                    ]);
                 }
             }
 
-            LogAktivitas::record(
-                'Edit Pengembalian',
-                'Pengembalian',
-                $pengembalian->id,
-                "Mengubah pengembalian #{$pengembalian->id} | Peminjam: {$pengembalian->peminjaman->user->name} | Tanggal: {$oldTanggal} → {$request->tanggal_kembali_aktual} | Keterlambatan: {$keterlambatan} hari"
-            );
+            LogAktivitas::record('Update Pengembalian', 'Pengembalian', $pengembalian->id,
+                "Admin memperbarui data pengembalian #" . $id);
 
             DB::commit();
+            return redirect()->route('admin.pengembalian.index')->with('success', 'Data pengembalian diperbarui.');
 
-            return redirect()->route('admin.pengembalian.index')
-                ->with('success', 'Data pengembalian berhasil diperbarui.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()
-                ->with('error', 'Gagal memperbarui pengembalian: ' . $e->getMessage())
-                ->withInput();
+            return redirect()->back()->with('error', $e->getMessage());
         }
     }
 
-    public function destroy(string $id)
+    public function destroy($id)
     {
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
+            $pengembalian = Pengembalian::with('details')->findOrFail($id);
+            $peminjaman   = $pengembalian->peminjaman;
 
-            $pengembalian = Pengembalian::with('peminjaman.user', 'peminjaman.details', 'details')
-                ->where('status_pengembalian', 'diajukan')
-                ->findOrFail($id);
+            $peminjaman->update(['status' => 'dipinjam']);
 
-            $userName       = $pengembalian->peminjaman->user->name;
-            $pengembalianId = $pengembalian->id;
-            $peminjamanId   = $pengembalian->peminjaman_id;
-
-            // Balikkan perubahan stok sebelum dihapus
             foreach ($pengembalian->details as $detail) {
-                $alat = Alat::find($detail->alat_id);
-                if (!$alat) continue;
-
-                $peminjamanDetail = $pengembalian->peminjaman->details
-                    ->firstWhere('alat_id', $detail->alat_id);
-                $jumlah = $peminjamanDetail ? $peminjamanDetail->jumlah : $detail->jumlah_kembali;
-
-                if (in_array($detail->kondisi_kembali, ['baik', 'rusak_ringan'])) {
-                    $alat->decrement('stok_tersedia', $jumlah);
-                } elseif (in_array($detail->kondisi_kembali, ['rusak_berat', 'hilang'])) {
-                    $alat->increment('stok_total', $jumlah);
+                if (!in_array($detail->kondisi_kembali, ['hilang', 'rusak_berat'])) {
+                    $buku = \App\Models\Buku::find($detail->buku_id);
+                    if ($buku) {
+                        $buku->decrement('stok_tersedia', $detail->jumlah_kembali);
+                    }
                 }
             }
 
             $pengembalian->delete();
 
-            LogAktivitas::record(
-                'Hapus Pengembalian',
-                'Pengembalian',
-                $pengembalianId,
-                "Menghapus pengembalian #{$pengembalianId} | Peminjam: {$userName} | Peminjaman #{$peminjamanId}"
-            );
+            LogAktivitas::record('Hapus Pengembalian', 'Pengembalian', $id,
+                "Admin menghapus data pengembalian #" . $id);
 
             DB::commit();
-
             return redirect()->route('admin.pengembalian.index')
-                ->with('success', 'Data pengembalian berhasil dihapus.');
+                ->with('success', 'Data pengembalian dihapus. Peminjaman dikembalikan ke status dipinjam.');
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()
-                ->with('error', 'Gagal menghapus pengembalian: ' . $e->getMessage());
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function lunasi($id)
+    {
+        $pengembalian = Pengembalian::findOrFail($id);
+        $pengembalian->update(['status_pembayaran' => 'lunas']);
+
+        LogAktivitas::record('Pelunasan Denda', 'Pengembalian', $id,
+            "Admin melunasi denda pengembalian #" . $id);
+
+        return redirect()->back()->with('success', 'Denda telah dilunasi.');
+    }
+
+    // ✅ Method konfirmasi: terima kondisi & denda dari form modal
+    public function konfirmasi(Request $request, $id) {
+        DB::beginTransaction();
+        try {
+            $pengembalian = Pengembalian::with(['peminjaman.user', 'details.buku'])->findOrFail($id);
+
+            if ($pengembalian->status_pengembalian !== 'diajukan') {
+                throw new \Exception('Pengembalian ini sudah dikonfirmasi sebelumnya.');
+            }
+
+            $peminjaman   = $pengembalian->peminjaman;
+            $dendaConfig  = Denda::first();
+            $dendaPerHari = $dendaConfig->denda_per_hari ?? 5000;
+
+            $tglRencana = Carbon::parse($peminjaman->tanggal_kembali_rencana)->startOfDay();
+            $tglAktual  = Carbon::parse($pengembalian->tanggal_kembali_aktual)->startOfDay();
+
+            $keterlambatan      = 0;
+            $dendaKeterlambatan = 0;
+
+            if ($tglAktual->gt($tglRencana)) {
+                $keterlambatan      = $tglRencana->diffInDays($tglAktual);
+                $dendaKeterlambatan = $keterlambatan * $dendaPerHari;
+            }
+
+            // ✅ Ambil kondisi & denda dari input form modal (bukan hitung otomatis)
+            $kondisiKembali      = $request->input('kondisi_kembali', []);
+            $dendaKerusakanInput = $request->input('denda_kerusakan_buku', []);
+            $detailIds           = $request->input('detail_id', []);
+
+            $dendaKerusakanTotal = 0;
+
+            foreach ($pengembalian->details as $index => $detail) {
+                $detailId    = $detailIds[$index] ?? null;
+                $kondisi     = $kondisiKembali[$index] ?? $detail->kondisi_kembali;
+                $dendaItem   = isset($dendaKerusakanInput[$index]) ? (float)$dendaKerusakanInput[$index] : 0;
+
+                $dendaKerusakanTotal += $dendaItem;
+
+                $detail->update([
+                    'kondisi_kembali'      => $kondisi,
+                    'denda_kerusakan_buku' => $dendaItem,
+                ]);
+
+                // Update stok: hanya tambah jika kondisi bukan hilang/rusak_berat
+                if (!in_array($kondisi, ['hilang', 'rusak_berat'])) {
+                    $buku = \App\Models\Buku::find($detail->buku_id);
+                    if ($buku) {
+                        $buku->increment('stok_tersedia', $detail->jumlah_kembali);
+                    }
+                }
+            }
+
+            $totalDenda       = $dendaKeterlambatan + $dendaKerusakanTotal;
+            $statusPembayaran = ($totalDenda > 0) ? 'belum_lunas' : 'tidak_ada_denda';
+
+            $pengembalian->update([
+                'status_pengembalian' => 'dikonfirmasi',
+                'status_pembayaran'   => $statusPembayaran,
+                'petugas_id'          => Auth::id(),
+                'keterlambatan_hari'  => $keterlambatan,
+                'denda_keterlambatan' => $dendaKeterlambatan,
+                'denda_kerusakan'     => $dendaKerusakanTotal,
+                'total_denda'         => $totalDenda,
+            ]);
+
+            $peminjaman->update(['status' => 'dikembalikan']);
+
+            LogAktivitas::record('Konfirmasi Pengembalian', 'Pengembalian', $pengembalian->id,
+                "Admin mengkonfirmasi pengembalian dari " . $peminjaman->user->name);
+
+            DB::commit();
+            return redirect()->back()->with('success', 'Pengembalian berhasil dikonfirmasi.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function previewKonfirmasi($id)
+    {
+        $pengembalian = Pengembalian::with(['peminjaman.user', 'details.buku'])->findOrFail($id);
+        $peminjaman   = $pengembalian->peminjaman;
+        $dendaConfig  = Denda::first();
+        $dendaPerHari = $dendaConfig->denda_per_hari ?? 5000;
+        $persenRingan = $dendaConfig->denda_rusak_ringan            ?? 10;
+        $persenBerat  = $dendaConfig->denda_rusak_berat             ?? 50;
+        $persenHilang = $dendaConfig->persentase_penggantian_hilang ?? 100;
+
+        $tglRencana = Carbon::parse($peminjaman->tanggal_kembali_rencana)->startOfDay();
+        $tglAktual  = Carbon::parse($pengembalian->tanggal_kembali_aktual)->startOfDay();
+
+        $keterlambatan      = 0;
+        $dendaKeterlambatan = 0;
+
+        if ($tglAktual->gt($tglRencana)) {
+            $keterlambatan      = $tglRencana->diffInDays($tglAktual);
+            $dendaKeterlambatan = $keterlambatan * $dendaPerHari;
+        }
+
+        $details = [];
+        $dendaKerusakanTotal = 0;
+
+        foreach ($pengembalian->details as $detail) {
+            $hargaBuku = $detail->buku->harga_buku ?? 0;
+            $dendaItem = 0;
+
+            // Hitung denda otomatis sebagai nilai default (bisa diubah admin di modal)
+            if ($detail->kondisi_kembali === 'rusak_ringan') {
+                $dendaItem = $hargaBuku * ($persenRingan / 100);
+            } elseif ($detail->kondisi_kembali === 'rusak_berat') {
+                $dendaItem = $hargaBuku * ($persenBerat / 100);
+            } elseif ($detail->kondisi_kembali === 'hilang') {
+                $dendaItem = $hargaBuku * ($persenHilang / 100);
+            }
+
+            $dendaKerusakanTotal += $dendaItem;
+            $details[] = [
+                'detail_id'            => $detail->id,           // ✅ Kirim detail_id untuk update
+                'judul_buku'           => $detail->buku->judul_buku,
+                'jumlah'               => $detail->jumlah_kembali,
+                'kondisi_kembali'      => $detail->kondisi_kembali,
+                'harga_buku'           => $hargaBuku,
+                'denda_kerusakan_buku' => $dendaItem,
+            ];
+        }
+
+        $totalDenda = $dendaKeterlambatan + $dendaKerusakanTotal;
+
+        return response()->json([
+            'peminjaman_id'           => $peminjaman->id,
+            'nama_peminjam'           => $peminjaman->user->name,
+            'nisn'                    => $peminjaman->user->NISN          ?? '-',
+            'kelas_jurusan'           => $peminjaman->user->kelas_jurusan ?? '-',
+            'tanggal_pinjam'          => Carbon::parse($peminjaman->tanggal_pinjam)->format('d/m/Y'),
+            'tanggal_rencana_kembali' => Carbon::parse($peminjaman->tanggal_kembali_rencana)->format('d/m/Y'),
+            'tanggal_kembali_aktual'  => Carbon::parse($pengembalian->tanggal_kembali_aktual)->format('d/m/Y'),
+            'keterlambatan_hari'      => $keterlambatan,
+            'denda_keterlambatan'     => $dendaKeterlambatan,
+            'denda_kerusakan'         => $dendaKerusakanTotal,
+            'total_denda'             => $totalDenda,
+            'persen_ringan'           => $persenRingan,   // ✅ Kirim persentase untuk JS
+            'persen_berat'            => $persenBerat,
+            'persen_hilang'           => $persenHilang,
+            'details'                 => $details,
+        ]);
+    }
+
+    public function riwayat()
+    {
+        $riwayats = Pengembalian::with(['peminjaman.user', 'petugas', 'details.buku'])
+            ->where('status_pengembalian', 'dikonfirmasi')
+            ->whereIn('status_pembayaran', ['lunas', 'tidak_ada_denda'])
+            ->latest()
+            ->get();
+
+        return view('admin.pengembalian.riwayat', compact('riwayats'));
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // BARU: Show data JSON untuk modal struk
+    // ════════════════════════════════════════════════════════════════
+    public function showStruk($id)
+    {
+        $pengembalian = Pengembalian::with([
+            'peminjaman.user',
+            'peminjaman.details.buku',
+            'details.buku',
+            'petugas',
+        ])->findOrFail($id);
+
+        $details = $pengembalian->details->isNotEmpty()
+            ? $pengembalian->details->map(fn ($d) => [
+                'judul_buku'           => $d->buku->judul_buku ?? '-',
+                'jumlah'               => $d->jumlah_kembali,
+                'kondisi_kembali'      => $d->kondisi_kembali,
+                'denda_kerusakan_buku' => $d->denda_kerusakan_buku ?? 0,
+              ])
+            : $pengembalian->peminjaman->details->map(fn ($d) => [
+                'judul_buku'           => $d->buku->judul_buku ?? '-',
+                'jumlah'               => $d->jumlah ?? 1,
+                'kondisi_kembali'      => 'baik',
+                'denda_kerusakan_buku' => 0,
+              ]);
+
+        return response()->json([
+            'id'                  => $pengembalian->id,
+            'nama_peminjam'       => $pengembalian->peminjaman->user->name ?? '-',
+            'email_peminjam'      => $pengembalian->peminjaman->user->email ?? '-',
+            'petugas'             => $pengembalian->petugas->name ?? '-',
+            'tanggal_pinjam'      => optional($pengembalian->peminjaman->tanggal_pinjam)->format('d/m/Y') ?? '-',
+            'tanggal_rencana'     => optional($pengembalian->peminjaman->tanggal_kembali_rencana)->format('d/m/Y') ?? '-',
+            'tanggal_kembali'     => Carbon::parse($pengembalian->tanggal_kembali_aktual)->format('d/m/Y'),
+            'keterlambatan_hari'  => $pengembalian->keterlambatan_hari ?? 0,
+            'denda_keterlambatan' => $pengembalian->denda_keterlambatan ?? 0,
+            'denda_kerusakan'     => $pengembalian->denda_kerusakan ?? 0,
+            'total_denda'         => $pengembalian->total_denda ?? 0,
+            'status_pembayaran'   => $pengembalian->status_pembayaran,
+            'details'             => $details,
+        ]);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // BARU: Download PDF struk
+    // ════════════════════════════════════════════════════════════════
+    public function downloadStruk($id)
+    {
+        $pengembalian = Pengembalian::with([
+            'peminjaman.user',
+            'peminjaman.details.buku',
+            'details.buku',
+            'petugas',
+        ])->findOrFail($id);
+
+        $detailSource = $pengembalian->details->isNotEmpty()
+            ? $pengembalian->details
+            : $pengembalian->peminjaman->details->map(function ($d) {
+                $d->jumlah_kembali     = $d->jumlah ?? 1;
+                $d->kondisi_kembali    = 'baik';
+                $d->keterangan_kondisi = '-';
+                $d->denda_kerusakan_buku = 0;
+                return $d;
+            });
+
+        $pdf = Pdf::loadView('pdf.struk-pengembalian', [
+            'pengembalian' => $pengembalian,
+            'detailSource' => $detailSource,
+        ])->setPaper('A5', 'portrait');
+
+        $noTrx = str_pad($id, 6, '0', STR_PAD_LEFT);
+        return $pdf->download("struk-pengembalian-{$noTrx}.pdf");
+    }
+
+        // ════════════════════════════════════════════════════════════════
+    // BARU: Kirim struk via email
+    // ════════════════════════════════════════════════════════════════
+    public function kirimStruk($id)
+    {
+        $pengembalian = Pengembalian::with([
+            'peminjaman.user',
+            'peminjaman.details.buku',
+            'details.buku',
+            'petugas',
+        ])->findOrFail($id);
+
+        $email = $pengembalian->peminjaman->user->email ?? null;
+
+        if (! $email) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email peminjam tidak ditemukan.',
+            ], 422);
+        }
+
+        try {
+            Mail::to($email)->send(new StrukPengembalianMail($pengembalian));
+            LogAktivitas::record('Kirim Struk Email', 'Pengembalian', $id,
+                "Admin mengirim struk pengembalian #{$id} ke {$email}");
+            return response()->json([
+                'success' => true,
+                'message' => "Struk berhasil dikirim ke {$email}",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal kirim email: ' . $e->getMessage(),
+            ], 500);
         }
     }
 }

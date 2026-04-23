@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard Admin - Kategori</title>
+  <title>Dashboard Admin - Kategori Buku</title>
   <link rel="stylesheet" href="{{ asset ('template/css/styles.min.css') }}" />
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
@@ -30,11 +30,11 @@
             <div class="card-body">
 
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="card-title fw-semibold">Data Kategori</h5>
+                <h5 class="card-title fw-semibold">Data Kategori Buku</h5>
 
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createKategoriModal">
                   <iconify-icon icon="solar:add-circle-outline" width="18" class="me-1"></iconify-icon>
-                  Tambah Kategori
+                  Tambah Kategori Buku
                 </button>
             </div>
 
@@ -120,7 +120,7 @@
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="createKategoriModalLabel">Tambah Kategori Baru</h5>
+          <h5 class="modal-title" id="createKategoriModalLabel">Tambah Kategori Buku Baru</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <form action="{{ route('kategoris.store') }}" method="POST" id="createKategoriForm">

@@ -49,7 +49,7 @@
                                         <h2 class="fw-bold text-white mb-2">Selamat Datang, {{ Auth::user()->name ?? 'Administrator' }}! 👋</h2>
                                         <p class="text-white opacity-75 mb-0">
                                             Hari ini adalah <strong>{{ date('d F Y') }}</strong>. <br>
-                                            Pantau aktivitas peminjaman alat dengan mudah melalui ringkasan di bawah ini.
+                                            Pantau aktivitas peminjaman buku dengan mudah melalui ringkasan di bawah ini.
                                         </p>
                                     </div>
                                     <div class="d-none d-lg-block">
@@ -85,11 +85,11 @@
                             <div class="card-body">
                                 <div class="d-flex align-items-center">
                                     <div class="icon-box bg-warning-subtle">
-                                        <i class="ti ti-tool fs-6 text-warning"></i>
+                                        <i class="ti ti-book fs-6 text-warning"></i>
                                     </div>
                                     <div class="ms-3">
-                                        <h3 class="mb-0 fw-bold">{{ $totalAlat }}</h3>
-                                        <span class="text-muted fs-3">Total Inventaris Alat</span>
+                                        <h3 class="mb-0 fw-bold">{{ $totalBuku }}</h3>
+                                        <span class="text-muted fs-3">Total Koleksi Buku</span>
                                     </div>
                                 </div>
                             </div>
@@ -114,7 +114,23 @@
                 </div>
 
                 {{-- Row 2: Status Peminjaman --}}
-                <div class="row">
+                    <div class="row">
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card card-stats shadow-sm h-100 border-0">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-box bg-warning-subtle">
+                                        <i class="ti ti-hourglass fs-6 text-warning"></i>
+                                    </div>
+                                    <div class="ms-3">
+                                        <h3 class="mb-0 fw-bold">{{ $peminjamanMenunggu }}</h3>
+                                        <span class="text-muted fs-3">Menunggu Persetujuan</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card card-stats shadow-sm h-100 border-0">
                             <div class="card-body">

@@ -25,7 +25,7 @@
                 <!-- Footer Text -->
                 <div class="text-center mt-6">
                     <p class="text-sm text-gray-600">
-                        © {{ date('Y') }} Sistem Peminjaman Alat
+                        © {{ date('Y') }} Sistem Peminjaman Buku
                     </p>
                 </div>
             </div>

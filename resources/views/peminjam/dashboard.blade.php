@@ -43,7 +43,7 @@
                                     </h2>
                                     <p class="text-white opacity-75 mb-0">
                                         Hari ini adalah <strong>{{ date('d F Y') }}</strong>.<br>
-                                        Pantau status peminjaman alatmu melalui ringkasan di bawah ini.
+                                        Pantau status peminjaman bukumu melalui ringkasan di bawah ini.
                                     </p>
                                 </div>
                                 <div class="d-none d-lg-block">

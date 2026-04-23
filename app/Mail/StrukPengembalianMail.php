@@ -8,8 +8,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Queue\SerializesModels;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class StrukPengembalianMail extends Mailable
@@ -25,8 +25,11 @@ class StrukPengembalianMail extends Mailable
 
     public function envelope(): Envelope
     {
+        $nama  = $this->pengembalian->peminjaman->user->name ?? 'Peminjam';
+        $noTrx = str_pad($this->pengembalian->id, 6, '0', STR_PAD_LEFT);
+
         return new Envelope(
-            subject: 'Struk Pengembalian Alat - ' . $this->pengembalian->peminjaman->user->name,
+            subject: "[Perpustakaan Digital] Struk Pengembalian Buku #{$noTrx} - {$nama}",
         );
     }
 
@@ -34,19 +37,19 @@ class StrukPengembalianMail extends Mailable
     {
         return new Content(
             view: 'emails.struk-pengembalian',
+            with: ['pengembalian' => $this->pengembalian],
         );
     }
 
     public function attachments(): array
     {
         $pengembalian = $this->pengembalian;
-        $denda        = Denda::first();
 
-        // ✅ Resolve detailSource sama seperti di controller
+        // Resolve detail source
         $detailSource = $pengembalian->details->isNotEmpty()
             ? $pengembalian->details
             : $pengembalian->peminjaman->details->map(function ($d) {
-                $d->jumlah_kembali     = $d->jumlah;
+                $d->jumlah_kembali     = $d->jumlah ?? 1;
                 $d->kondisi_kembali    = 'baik';
                 $d->keterangan_kondisi = '-';
                 return $d;
@@ -54,14 +57,15 @@ class StrukPengembalianMail extends Mailable
 
         $pdf = Pdf::loadView('pdf.struk-pengembalian', [
             'pengembalian' => $pengembalian,
-            'denda'        => $denda,
             'detailSource' => $detailSource,
-        ])->setPaper([0, 0, 226.77, 595.28]);
+        ])->setPaper('A5', 'portrait');
+
+        $noTrx = str_pad($pengembalian->id, 6, '0', STR_PAD_LEFT);
 
         return [
             Attachment::fromData(
                 fn () => $pdf->output(),
-                'struk-pengembalian-' . str_pad($pengembalian->id, 6, '0', STR_PAD_LEFT) . '.pdf'
+                "struk-pengembalian-{$noTrx}.pdf"
             )->withMime('application/pdf'),
         ];
     }
