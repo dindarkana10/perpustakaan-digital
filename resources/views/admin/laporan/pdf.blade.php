@@ -91,8 +91,17 @@
                 <td class="text-center">
                     <span class="badge">{{ $item->peminjaman->status_label }}</span>
                 </td>
+               @php
+                    $detailKembali = $item->peminjaman->pengembalian
+                        ?->details
+                        ->firstWhere('buku_id', $item->buku_id);
+
+                    $dendaItem = $detailKembali
+                        ? ($detailKembali->denda_kerusakan_buku + $detailKembali->biaya_perbaikan + $detailKembali->biaya_penggantian)
+                        : 0;
+                @endphp
                 <td class="text-right">
-                    Rp {{ number_format($item->peminjaman->pengembalian ? $item->peminjaman->pengembalian->total_denda : 0, 0, ',', '.') }}
+                    Rp {{ number_format($dendaItem, 0, ',', '.') }}
                 </td>
             </tr>
             @endforeach

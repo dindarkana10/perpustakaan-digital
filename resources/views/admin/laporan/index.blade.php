@@ -204,8 +204,17 @@
                                                 {{ $item->peminjaman->status_label }}
                                             </span>
                                         </td>
-                                        <td class="text-end fw-bold {{ ($item->peminjaman->pengembalian && $item->peminjaman->pengembalian->total_denda > 0) ? 'text-danger' : 'text-muted' }}">
-                                            Rp {{ number_format($item->peminjaman->pengembalian ? $item->peminjaman->pengembalian->total_denda : 0, 0, ',', '.') }}
+                                        @php
+                                            $detailKembali = $item->peminjaman->pengembalian
+                                                ?->details
+                                                ->firstWhere('buku_id', $item->buku_id);
+
+                                            $dendaItem = $detailKembali
+                                                ? ($detailKembali->denda_kerusakan_buku + $detailKembali->biaya_perbaikan + $detailKembali->biaya_penggantian)
+                                                : 0;
+                                        @endphp
+                                        <td class="text-end fw-bold {{ $dendaItem > 0 ? 'text-danger' : 'text-muted' }}">
+                                            Rp {{ number_format($dendaItem, 0, ',', '.') }}
                                         </td>
                                     </tr>
                                     @empty

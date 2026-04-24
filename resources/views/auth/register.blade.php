@@ -47,16 +47,20 @@
                 <div>
                     <x-input-label for="kelas_jurusan" :value="__('Kelas Jurusan')" class="text-gray-700 font-medium ml-1" />
                         <select id="kelas_jurusan" name="kelas_jurusan" class="block mt-1 w-full border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 py-2.5">
-                            <option value="">Pilih Kelas</option>
+                         <option value="">Pilih Kelas</option>
                             @foreach([
-                                /* Kelas 10 */
-                                '10 PPLG 1', '10 PPLG 2', '10 PPLG 3', '10 BCF 1', '10 BCF 2', '10 ANM 1', '10 ANM 2', '10 TO 1', '10 TO 2', '10 TPFL 1', '10 TPFL 2',
-                                /* Kelas 11 */
-                                '11 PPLG 1', '11 PPLG 2', '11 PPLG 3', '11 BCF 1', '11 BCF 2', '11 ANM 1', '11 ANM 2', '11 TO 1', '11 TO 2', '11 TPFL 1', '11 TPFL 2',
-                                /* Kelas 12 */
-                                '12 PPLG 1', '12 PPLG 2', '12 PPLG 3', '12 BCF 1', '12 BCF 2', '12 ANM 1', '12 ANM 2', '12 TO 1', '12 TO 2', '12 TPFL 1', '12 TPFL 2'
+                                /* Kelas X */
+                                'X PPLG 1', 'X PPLG 2', 'X PPLG 3', 'X BCF 1', 'X BCF 2', 'X ANM 1', 'X ANM 2', 'X TO 1', 'X TO 2', 'X TPFL 1', 'X TPFL 2',
+                                
+                                /* Kelas XI */
+                                'XI PPLG 1', 'XI PPLG 2', 'XI PPLG 3', 'XI BCF 1', 'XI BCF 2', 'XI ANM 1', 'XI ANM 2', 'XI TO 1', 'XI TO 2', 'XI TPFL 1', 'XI TPFL 2',
+                                
+                                /* Kelas XII */
+                                'XII PPLG 1', 'XII PPLG 2', 'XII PPLG 3', 'XII BCF 1', 'XII BCF 2', 'XII ANM 1', 'XII ANM 2', 'XII TO 1', 'XII TO 2', 'XII TPFL 1', 'XII TPFL 2'
                             ] as $kelas)
-                                <option value="{{ $kelas }}" {{ old('kelas_jurusan') == $kelas ? 'selected' : '' }}>{{ $kelas }}</option>
+                                <option value="{{ $kelas }}" {{ old('kelas_jurusan') == $kelas ? 'selected' : '' }}>
+                                    {{ $kelas }}
+                                </option>
                             @endforeach
                         </select>
                     <x-input-error :messages="$errors->get('kelas_jurusan')" class="mt-2" />
